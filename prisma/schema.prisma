@@ -15,7 +15,7 @@ datasource db {
 enum Role {
   CUSTOMER
   ADMIN
-}
+} 
 
 model User {
   id            Int            @id @default(autoincrement())

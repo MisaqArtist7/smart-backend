@@ -63,6 +63,9 @@ model Category {
   name      String     @db.VarChar(100)
   slug      String     @unique @db.VarChar(120)
   image     String?    @db.VarChar(255)
+  imageAlt        String? @db.VarChar(150)
+  metaTitle       String? @db.VarChar(70)
+  metaDescription String? @db.VarChar(170)
   isActive  Boolean    @default(true)
   products  Product[]
   sortOrder Int @default(0)

@@ -7,6 +7,16 @@ import { UpdateCategoryDto } from './dto/update-category.dto.js';
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
+  @Get()
+  findAll() {
+    return this.categoryService.findAll();
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.categoryService.findOne(+id);
+  }
+
   @Post()
   create(@Body() data : CreateCategoryDto) {
     return this.categoryService.create(data);
@@ -16,4 +26,5 @@ export class CategoryController {
   remove(@Param('id') id: string) {
     return this.categoryService.remove(Number(id));
   }
+
 }

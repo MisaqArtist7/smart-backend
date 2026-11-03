@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateCategoryDto } from './dto/create-category.dto.js';
+import { ForbiddenException } from '@nestjs/common';
 
 @Injectable()
 export class CategoryService {
@@ -12,9 +13,9 @@ export class CategoryService {
     });
 
     if (existingCategory) {
-      throw new Error('Category with this slug already exists');
+      throw new ForbiddenException('Category with this slug already exists');
     }
-    
+
     return this.prisma.category.create({
       data,
     });

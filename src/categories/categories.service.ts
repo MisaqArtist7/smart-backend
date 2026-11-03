@@ -18,8 +18,8 @@ export class CategoryService {
     return this.prisma.category.create({ data: dto });
   }
 
-  findAll() {
-    return this.prisma.category.findMany({
+  async findAll() {
+    return await this.prisma.category.findMany({
       orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
     });
   }

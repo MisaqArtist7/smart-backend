@@ -15,9 +15,12 @@ export class CategoryService {
     const category = await this.prisma.category.findUnique({
       where: { id },
     });
-    return this.prisma.category.findUnique({
-      where: { id },
-    });
+
+    if (!category) {
+      throw new ForbiddenException('Category not found');
+    }
+
+    return category;
   }
 
   async create(data : CreateCategoryDto) {

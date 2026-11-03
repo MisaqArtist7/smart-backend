@@ -57,7 +57,7 @@ model RefreshToken {
 
 model Category {
   id        Int        @id @default(autoincrement())
-  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
   parentId  Int?
   children  Category[] @relation("CategoryTree")
   name      String     @db.VarChar(100)
@@ -65,6 +65,8 @@ model Category {
   image     String?    @db.VarChar(255)
   isActive  Boolean    @default(true)
   products  Product[]
+  sortOrder Int @default(0)
+  description String? @db.Text
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 

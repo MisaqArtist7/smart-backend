@@ -7,4 +7,5 @@ import { UpdateCategoryDto } from './dto/update-category.dto.js';
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
+  @Post()
 }

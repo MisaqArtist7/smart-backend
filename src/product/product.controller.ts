@@ -5,7 +5,7 @@ import { ProductService } from './product.service.js';
 import { CreateProductDto } from './dto/createProduct.tdo.js';
 import { UpdateProductDto } from './dto/createUpdate.tdo.js';
 
-@Controller('products')
+@Controller('product')
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 

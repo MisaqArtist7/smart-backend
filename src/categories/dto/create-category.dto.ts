@@ -1,11 +1,5 @@
 import {
-    IsBoolean,
-    IsInt,
-    IsOptional,
-    IsString,
-    Matches,
-    MaxLength,
-    MinLength,
+    IsBoolean, IsInt, IsOptional, IsString, Matches, MaxLength, MinLength,
 } from 'class-validator';
 
 export class CreateCategoryDto {
@@ -20,39 +14,27 @@ export class CreateCategoryDto {
     @MaxLength(120)
     slug: string;
 
-    @IsOptional()
-    @IsInt()
+    @IsOptional() @IsInt()
     parentId?: number;
 
-    @IsOptional()
-    @IsString()
-    description: string;
+    @IsOptional() @IsString()
+    description?: string;
 
-    @IsOptional()
-    @IsString()
-    @MaxLength(255)
+    @IsOptional() @IsString() @MaxLength(255)
     image?: string;
 
-    @IsOptional()
-    @IsString()
-    @MaxLength(150)
+    @IsOptional() @IsString() @MaxLength(150)
     imageAlt?: string;
 
-    @IsOptional()
-    @IsString()
-    @MaxLength(70)
-    metaTitle: string;
+    @IsOptional() @IsString() @MaxLength(70)
+    metaTitle?: string;
 
-    @IsOptional()
-    @IsString()
-    @MaxLength(170)
-    metaDescription: string;
+    @IsOptional() @IsString() @MaxLength(170)
+    metaDescription?: string;
 
-    @IsOptional()
-    @IsInt()
+    @IsOptional() @IsInt()
     sortOrder?: number;
 
-    @IsOptional()
-    @IsBoolean()
+    @IsOptional() @IsBoolean()
     isActive?: boolean;
 }

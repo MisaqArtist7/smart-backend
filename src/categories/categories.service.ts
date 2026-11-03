@@ -1,66 +1,75 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateCategoryDto } from './dto/create-category.dto.js';
 import { UpdateCategoryDto } from './dto/update-category.dto.js';
-import { ForbiddenException } from '@nestjs/common';
 
 @Injectable()
 export class CategoryService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll() {
-    return this.prisma.category.findMany();
+  async create(dto: CreateCategoryDto) {
+    await this.assertSlugFree(dto.slug);
+    if (dto.parentId !== undefined) await this.assertParentExists(dto.parentId);
+    return this.prisma.category.create({ data: dto });
+  }
+
+  findAll() {
+    return this.prisma.category.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+    });
   }
 
   async findOne(id: number) {
-    const category = await this.prisma.category.findUnique({
-      where: { id },
-    });
-
-    if (!category) {
-      throw new ForbiddenException('Category not found');
-    }
-
+    const category = await this.prisma.category.findUnique({ where: { id } });
+    if (!category) throw new NotFoundException('Category not found');
     return category;
   }
 
-  async create(data : CreateCategoryDto) {
-    const existingCategory = await this.prisma.category.findUnique({
-      where: { slug: data.slug },
-    });
+  async update(id: number, dto: UpdateCategoryDto) {
+    const category = await this.findOne(id);
 
-    if (existingCategory) {
-      throw new ForbiddenException('Category with this slug already exists');
+    if (dto.slug && dto.slug !== category.slug) {
+      await this.assertSlugFree(dto.slug);
+    }
+    if (dto.parentId !== undefined) {
+      if (dto.parentId === id) {
+        throw new BadRequestException('A category cannot be its own parent');
+      }
+      await this.assertParentExists(dto.parentId);
     }
 
-    return this.prisma.category.create({
-      data,
-    });
-
-  }
-
-  async update(id: number, data: UpdateCategoryDto) {
-    const category = await this.prisma.category.findUnique({ where: { id } });  
-
-    if (!category) {
-      throw new ForbiddenException('Category not found');
-    }
-
-    return this.prisma.category.update({ where: { id: Number(id) }, data });
+    return this.prisma.category.update({ where: { id }, data: dto });
   }
 
   async remove(id: number) {
-    const category = await this.prisma.category.findUnique({
-      where: { id },
-    });
+    await this.findOne(id);
 
-    if (!category) {
-      throw new ForbiddenException('Category not found');
+    const [children, products] = await Promise.all([
+      this.prisma.category.count({ where: { parentId: id } }),
+      this.prisma.product.count({ where: { categoryId: id } }),
+    ]);
+    if (children > 0 || products > 0) {
+      throw new ConflictException(
+        'This category has subcategories or products. Move or delete them first.',
+      );
     }
 
-    return this.prisma.category.delete({
-      where: { id },
-    });
+    await this.prisma.category.delete({ where: { id } });
+    return { message: 'Category deleted' };
+  }
 
+  private async assertSlugFree(slug: string) {
+    const exists = await this.prisma.category.findUnique({ where: { slug } });
+    if (exists) throw new ConflictException('This slug is already used');
+  }
+
+  private async assertParentExists(parentId: number) {
+    const parent = await this.prisma.category.findUnique({ where: { id: parentId } });
+    if (!parent) throw new BadRequestException('Parent category not found');
   }
 }

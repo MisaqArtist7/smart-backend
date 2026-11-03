@@ -46,7 +46,7 @@ export class CreateCategoryDto {
     @IsOptional()
     @IsString()
     @MaxLength(170)
-    metaDescription?: string;
+    metaDescription: string;
 
     @IsOptional()
     @IsInt()

@@ -11,4 +11,9 @@ export class CategoryController {
   create(@Body() data : CreateCategoryDto) {
     return this.categoryService.create(data);
   }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.categoryService.remove(id);
+  }
 }

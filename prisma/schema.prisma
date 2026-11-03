@@ -60,6 +60,7 @@ model Category {
   parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
   parentId  Int?
   children  Category[] @relation("CategoryTree")
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
   name      String     @db.VarChar(100)
   slug      String     @unique @db.VarChar(120)
   image     String?    @db.VarChar(255)

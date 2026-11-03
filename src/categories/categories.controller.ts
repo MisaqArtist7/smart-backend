@@ -14,6 +14,6 @@ export class CategoryController {
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.categoryService.remove(id);
+    return this.categoryService.remove(Number(id));
   }
 }

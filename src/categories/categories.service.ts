@@ -19,5 +19,20 @@ export class CategoryService {
     return this.prisma.category.create({
       data,
     });
+
+  }
+  
+  async remove(id: number) {
+    const category = await this.prisma.category.findUnique({
+      where: { id },
+    });
+
+    if (!category) {
+      throw new ForbiddenException('Category not found');
+    }
+
+    return this.prisma.category.delete({
+      where: { id },
+    });
   }
 }

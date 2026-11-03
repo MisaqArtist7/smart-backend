@@ -7,6 +7,16 @@ import { ForbiddenException } from '@nestjs/common';
 export class CategoryService {
   constructor(private prisma: PrismaService) {}
 
+  async findAll() {
+    return this.prisma.category.findMany();
+  }
+
+  async findOne(id: number) {
+    return this.prisma.category.findUnique({
+      where: { id },
+    });
+  }
+
   async create(data : CreateCategoryDto) {
     const existingCategory = await this.prisma.category.findUnique({
       where: { slug: data.slug },
@@ -21,7 +31,7 @@ export class CategoryService {
     });
 
   }
-  
+
   async remove(id: number) {
     const category = await this.prisma.category.findUnique({
       where: { id },
@@ -34,5 +44,7 @@ export class CategoryService {
     return this.prisma.category.delete({
       where: { id },
     });
+
+
   }
 }

@@ -12,10 +12,10 @@ export class CategoryController {
     return this.categoryService.findAll();
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.categoryService.findOne(+id);
-  }
+  // @Get(':id')
+  // findOne(@Param('id') id: string) {
+  //   return this.categoryService.findOne(+id);
+  // }
 
   @Post()
   create(@Body() data : CreateCategoryDto) {

@@ -6,7 +6,6 @@ import { create } from 'domain';
 export class CategoryService {
   constructor(private prisma: PrismaService) {}
 
-  @create()
   async create(data: { name: string; description: string }) {
     return this.prisma.category.create({
       data,

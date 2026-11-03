@@ -78,6 +78,7 @@ model Product {
   title       String         @db.VarChar(200)
   slug        String         @unique @db.VarChar(220)
   description String?        @db.Text
+  spects      Json?          @db.Json
   price       Int
   stock       Int            @default(0)
   isActive    Boolean        @default(true)

@@ -88,6 +88,8 @@ model Product {
   metaDescription String?         @db.VarChar(170)
   price           Int
   stock           Int             @default(0)
+  sku             String?         @unique @db.VarChar(50)
+  discountPrice   Int?
   isActive        Boolean         @default(true)
   images          ProductImage[]
   createdAt       DateTime        @default(now())
@@ -166,6 +168,8 @@ model Order {
   addressLine   String        @db.Text
   postalCode    String        @db.VarChar(10)
   note          String?       @db.Text
+  trackingCode  String?       @db.VarChar(50)
+  adminNote     String?       @db.Text
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 

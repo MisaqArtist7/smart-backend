@@ -8,24 +8,32 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateCategoryDto } from './dto/create-category.dto.js';
 import { UpdateCategoryDto } from './dto/update-category.dto.js';
 
+const categoryInclude = {
+  parent: { select: { id: true, name: true } },
+};
+
 @Injectable()
 export class CategoryService {
   constructor(private prisma: PrismaService) {}
 
   async create(dto: CreateCategoryDto) {
     await this.assertSlugFree(dto.slug);
-    if (dto.parentId !== undefined) await this.assertParentExists(dto.parentId);
-    return this.prisma.category.create({ data: dto });
+    if (dto.parentId != null) await this.assertParentExists(dto.parentId);
+    return this.prisma.category.create({ data: dto, include: categoryInclude });
   }
 
-  async findAll() {
-    return await this.prisma.category.findMany({
+  findAll() {
+    return this.prisma.category.findMany({
+      include: categoryInclude,
       orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
     });
   }
 
   async findOne(id: number) {
-    const category = await this.prisma.category.findUnique({ where: { id } });
+    const category = await this.prisma.category.findUnique({
+      where: { id },
+      include: categoryInclude,
+    });
     if (!category) throw new NotFoundException('Category not found');
     return category;
   }
@@ -36,14 +44,15 @@ export class CategoryService {
     if (dto.slug && dto.slug !== category.slug) {
       await this.assertSlugFree(dto.slug);
     }
-    if (dto.parentId !== undefined) {
-      if (dto.parentId === id) {
-        throw new BadRequestException('A category cannot be its own parent');
-      }
-      await this.assertParentExists(dto.parentId);
+    if (dto.parentId != null) {
+      await this.assertParentValid(id, dto.parentId);
     }
 
-    return this.prisma.category.update({ where: { id }, data: dto });
+    return this.prisma.category.update({
+      where: { id },
+      data: dto,
+      include: categoryInclude,
+    });
   }
 
   async remove(id: number) {
@@ -71,5 +80,26 @@ export class CategoryService {
   private async assertParentExists(parentId: number) {
     const parent = await this.prisma.category.findUnique({ where: { id: parentId } });
     if (!parent) throw new BadRequestException('Parent category not found');
+  }
+
+  // والد باید وجود داشته باشه و نباید خود دسته یا یکی از نوه‌هاش باشه
+  private async assertParentValid(id: number, parentId: number) {
+    if (parentId === id) {
+      throw new BadRequestException('A category cannot be its own parent');
+    }
+
+    let currentId: number | null = parentId;
+    while (currentId !== null) {
+      if (currentId === id) {
+        throw new BadRequestException('A category cannot be moved under its own subcategory');
+      }
+      const node: { parentId: number | null } | null =
+        await this.prisma.category.findUnique({
+          where: { id: currentId },
+          select: { parentId: true },
+        });
+      if (!node) throw new BadRequestException('Parent category not found');
+      currentId = node.parentId;
+    }
   }
 }

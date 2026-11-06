@@ -1,20 +1,26 @@
-import {
+import { UpdateProductDto } from './dto/createUpdate.tdo';
+    import {
     BadRequestException,
     ConflictException,
     Injectable,
     NotFoundException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
-import { CreateProductDto } from './dto/createProduct.tdo.js';
-import { UpdateProductDto } from './dto/createUpdate.tdo.js';
+    } from '@nestjs/common';
+    import { PrismaService } from '../prisma/prisma.service.js';
+    import { CreateProductDto } from './dto/createProduct.tdo.js';
+    import { UpdateProductDto } from './dto/createUpdate.tdo.js';
 
-@Injectable()
-export class ProductService {
+    const productInclude = {
+    images: { orderBy: { sortOrder: 'asc' as const } },
+    category: { select: { id: true, name: true } },
+    };
+
+    @Injectable()
+    export class ProductService {
     constructor(private readonly prisma: PrismaService) {}
 
     getAllProducts() {
         return this.prisma.product.findMany({
-        include: { images: { orderBy: { sortOrder: 'asc' } } },
+        include: productInclude,
         orderBy: { id: 'desc' },
         });
     }
@@ -22,32 +28,43 @@ export class ProductService {
     async getProduct(id: number) {
         const product = await this.prisma.product.findUnique({
         where: { id },
-        include: { images: { orderBy: { sortOrder: 'asc' } }, category: true },
+        include: productInclude,
         });
         if (!product) throw new NotFoundException('Product not found');
         return product;
     }
 
     async createProduct(data: CreateProductDto) {
-        if (data.discountPrice !== undefined && data.discountPrice >= data.price) {
-            throw new BadRequestException('Discount price must be less than price');
-        }
+        this.assertDiscountValid(data.price, data.discountPrice);
         await this.assertSlugFree(data.slug);
+        await this.assertSkuFree(data.sku);
         await this.assertCategoryExists(data.categoryId);
-        return this.prisma.product.create({ data });
+        return this.prisma.product.create({ data, include: productInclude });
     }
 
     async updateProduct(id: number, data: UpdateProductDto) {
         const product = await this.getProduct(id);
 
+        const finalPrice = data.price ?? product.price;
+        const finalDiscount =
+        data.discountPrice === undefined ? product.discountPrice : data.discountPrice;
+        this.assertDiscountValid(finalPrice, finalDiscount);
+
         if (data.slug && data.slug !== product.slug) {
         await this.assertSlugFree(data.slug);
+        }
+        if (data.sku && data.sku !== product.sku) {
+        await this.assertSkuFree(data.sku, id);
         }
         if (data.categoryId !== undefined) {
         await this.assertCategoryExists(data.categoryId);
         }
 
-        return this.prisma.product.update({ where: { id }, data });
+        return this.prisma.product.update({
+        where: { id },
+        data,
+        include: productInclude,
+        });
     }
 
     async deleteProduct(id: number) {
@@ -64,21 +81,27 @@ export class ProductService {
         return { message: 'Product deleted' };
     }
 
+    private assertDiscountValid(price: number, discountPrice?: number | null) {
+        if (discountPrice != null && discountPrice >= price) {
+        throw new BadRequestException('Discount price must be less than price');
+        }
+    }
+
     private async assertSlugFree(slug: string) {
         const exists = await this.prisma.product.findUnique({ where: { slug } });
         if (exists) throw new ConflictException('This slug is already used');
-    }
-
-    private async assertCategoryExists(categoryId: number) {
-        const category = await this.prisma.category.findUnique({ where: { id: categoryId } });
-        if (!category) throw new BadRequestException('Category not found');
     }
 
     private async assertSkuFree(sku?: string, exceptId?: number) {
         if (!sku) return;
         const exists = await this.prisma.product.findUnique({ where: { sku } });
         if (exists && exists.id !== exceptId) {
-            throw new ConflictException('This SKU is already used');
+        throw new ConflictException('This SKU is already used');
         }
-        }
-}
+    }
+
+    private async assertCategoryExists(categoryId: number) {
+        const category = await this.prisma.category.findUnique({ where: { id: categoryId } });
+        if (!category) throw new BadRequestException('Category not found');
+    }
+    }

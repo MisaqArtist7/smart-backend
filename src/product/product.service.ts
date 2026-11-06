@@ -73,4 +73,12 @@ export class ProductService {
         const category = await this.prisma.category.findUnique({ where: { id: categoryId } });
         if (!category) throw new BadRequestException('Category not found');
     }
+
+    private async assertSkuFree(sku?: string, exceptId?: number) {
+        if (!sku) return;
+        const exists = await this.prisma.product.findUnique({ where: { sku } });
+        if (exists && exists.id !== exceptId) {
+            throw new ConflictException('This SKU is already used');
+        }
+        }
 }

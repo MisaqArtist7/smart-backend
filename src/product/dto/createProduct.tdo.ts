@@ -34,6 +34,12 @@ export class CreateProductDto {
     @IsOptional() @IsString() @MaxLength(170)
     metaDescription?: string;
 
+    @IsOptional() @IsInt() @Min(0)
+    discountPrice?: number;
+
+    @IsOptional() @IsString() @MaxLength(50)
+    sku?: string;
+
     @IsOptional() @IsBoolean()
     isActive?: boolean;
 }

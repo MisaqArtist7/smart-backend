@@ -77,27 +77,27 @@ model Category {
 }
 
 model Product {
-  id              Int             @id @default(autoincrement())
-  category        Category        @relation(fields: [categoryId], references: [id])
+  id              Int            @id @default(autoincrement())
+  category        Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   categoryId      Int
-  title           String          @db.VarChar(200)
-  slug            String          @unique @db.VarChar(220)
-  description     String?         @db.Text
-  specs           Json?          
-  metaTitle       String?         @db.VarChar(70)
-  metaDescription String?         @db.VarChar(170)
+  title           String         @db.VarChar(200)
+  slug            String         @unique @db.VarChar(220)
+  description     String?        @db.Text
+  specs           Json?
+  metaTitle       String?        @db.VarChar(70)
+  metaDescription String?        @db.VarChar(170)
   price           Int
-  stock           Int             @default(0)
-  sku             String?         @unique @db.VarChar(50)
   discountPrice   Int?
-  isActive        Boolean         @default(true)
+  stock           Int            @default(0)
+  sku             String?        @unique @db.VarChar(50)
+  isActive        Boolean        @default(true)
   images          ProductImage[]
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  orderItems      OrderItem[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-
-  orderItems    OrderItem[]
-  @@index([categoryId])
+  @@index([categoryId, isActive])
+  @@index([isActive])
 }
 
 model ProductImage {

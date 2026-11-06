@@ -29,6 +29,9 @@ export class ProductService {
     }
 
     async createProduct(data: CreateProductDto) {
+        if (data.discountPrice !== undefined && data.discountPrice >= data.price) {
+            throw new BadRequestException('Discount price must be less than price');
+        }
         await this.assertSlugFree(data.slug);
         await this.assertCategoryExists(data.categoryId);
         return this.prisma.product.create({ data });

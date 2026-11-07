@@ -12,7 +12,10 @@ import { ProductService } from './product.service.js';
 import { CreateProductDto } from './dto/createProduct.tdo.js';
 import { UpdateProductDto } from './dto/createUpdate.tdo.js';
 import { Public } from '../auth/decorators/public.decorator.js';
+import { Roles } from '../auth/decorators/roles.decorator.js';
+import { Role } from '../generated/prisma/client.js';
 
+@Roles(Role.ADMIN)
 @Controller('product')
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
@@ -25,13 +28,15 @@ export class ProductController {
   @Public()
   @Get()
   getAllProducts() {
-    return this.productService.getAllProducts();
+    // مسیر عمومی فقط محصولات فعال از دسته‌های فعال را برمی‌گرداند
+    return this.productService.getAllProducts(false);
   }
 
   @Public()
   @Get(':id')
   getProduct(@Param('id', ParseIntPipe) id: number) {
-    return this.productService.getProduct(id);
+    // اگر محصول یا دسته‌اش غیرفعال باشد، خطای 404 صادر می‌شود
+    return this.productService.getProduct(id, false);
   }
 
   @Patch(':id')

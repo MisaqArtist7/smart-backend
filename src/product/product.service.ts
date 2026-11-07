@@ -17,19 +17,29 @@ const productInclude = {
 export class ProductService {
   constructor(private readonly prisma: PrismaService) {}
 
-  getAllProducts(onlyActive = false) {
+  getAllProducts(includeInactive = false) {
     return this.prisma.product.findMany({
-      where: onlyActive ? { isActive: true } : undefined,
+      where: includeInactive
+        ? undefined
+        : {
+            isActive: true,
+            category: { isActive: true },
+          },
       include: productInclude,
       orderBy: { id: 'desc' },
     });
   }
 
-  async getProduct(id: number, onlyActive = false) {
+  async getProduct(id: number, includeInactive = false) {
     const product = await this.prisma.product.findFirst({
       where: {
         id,
-        ...(onlyActive ? { isActive: true } : {}),
+        ...(includeInactive
+          ? {}
+          : {
+              isActive: true,
+              category: { isActive: true },
+            }),
       },
       include: productInclude,
     });

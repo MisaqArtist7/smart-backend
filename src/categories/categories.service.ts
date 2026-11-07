@@ -22,19 +22,24 @@ export class CategoryService {
     return this.prisma.category.create({ data: dto, include: categoryInclude });
   }
 
-  findAll(onlyActive = false) {
+  findAll(includeInactive = false) {
     return this.prisma.category.findMany({
-      where: onlyActive ? { isActive: true } : undefined,
+      where: includeInactive
+        ? undefined
+        : {
+            isActive: true,
+            OR: [{ parentId: null }, { parent: { isActive: true } }],
+          },
       include: categoryInclude,
       orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
     });
   }
 
-  async findOne(id: number, onlyActive = false) {
+  async findOne(id: number, includeInactive = false) {
     const category = await this.prisma.category.findFirst({
       where: {
         id,
-        ...(onlyActive ? { isActive: true } : {}),
+        ...(includeInactive ? {} : { isActive: true }),
       },
       include: categoryInclude,
     });

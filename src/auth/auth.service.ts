@@ -6,11 +6,14 @@ import {
   HttpStatus,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { createHmac, randomInt } from 'crypto';
+import { JwtService } from '@nestjs/jwt';
+import { createHash, createHmac, randomBytes, randomInt } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SmsService } from '../sms/sms.service.js';
 import { LoginDto, RegisterDto, VerifyOtpDto } from './dto/auth.dto.js';
+import { REFRESH_TOKEN_MAX_AGE_MS } from './auth.constants.js';
 
 const OTP_TTL_MS = 2 * 60_000; // کد ۲ دقیقه اعتبار دارد
 const RESEND_DELAY_MS = 60_000; // فاصله‌ی بین دو درخواست (۱ دقیقه)
@@ -22,6 +25,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sms: SmsService,
+    private readonly jwtService: JwtService,
   ) {}
 
   private hashCode(code: string): string {
@@ -30,9 +34,67 @@ export class AuthService {
   }
 
   /**
+   * تولید توکن دسترسی (Access Token) با مدت زمان ۱۵ دقیقه
+   */
+  async generateAccessToken(user: {
+    id: number;
+    phone: string;
+    role: string;
+  }): Promise<string> {
+    return this.jwtService.signAsync({
+      sub: user.id,
+      phone: user.phone,
+      role: user.role,
+    });
+  }
+
+  /**
+   * تولید رشته تصادفی امن برای رفرش توکن
+   */
+  generateRefreshToken(): string {
+    return randomBytes(40).toString('hex');
+  }
+
+  /**
+   * هش کردن رفرش توکن با SHA-256 جهت ذخیره در دیتابیس
+   */
+  hashRefreshToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  /**
+   * ایجاد نشست جدید و ثبت رفرش توکن در دیتابیس
+   */
+  async issueSession(
+    userId: number,
+    userPhone: string,
+    userRole: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const accessToken = await this.generateAccessToken({
+      id: userId,
+      phone: userPhone,
+      role: userRole,
+    });
+
+    const rawRefreshToken = this.generateRefreshToken();
+    const tokenHash = this.hashRefreshToken(rawRefreshToken);
+    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS);
+
+    await this.prisma.refreshToken.create({
+      data: {
+        userId,
+        tokenHash,
+        expiresAt,
+      },
+    });
+
+    return { accessToken, refreshToken: rawRefreshToken };
+  }
+
+  /**
    * تولید و ارسال کد OTP به همراه بررسی محدودیت‌های زمانی و تعداد درخواست
    */
-  private async sendOtp(phone: string): Promise<void> {
+  private async sendOtp(phone: string): Promise<string> {
     const now = Date.now();
 
     // بررسی حداقل فاصله‌ی زمانی بین دو درخواست ارسال پیامک
@@ -74,6 +136,8 @@ export class AuthService {
 
     // ارسال کد از طریق سرویس اس‌ام‌اس
     await this.sms.sendOtp(phone, code);
+
+    return code;
   }
 
   /**
@@ -99,12 +163,13 @@ export class AuthService {
       },
     });
 
-    await this.sendOtp(dto.phone);
+    const code = await this.sendOtp(dto.phone);
 
     return {
       message: 'ثبت‌نام با موفقیت انجام شد و کد تأیید ارسال گردید',
       phone: user.phone,
       isNewUser: true,
+      ...(process.env.NODE_ENV !== 'production' && { devCode: code }),
     };
   }
 
@@ -128,12 +193,13 @@ export class AuthService {
       throw new ForbiddenException('حساب کاربری شما غیرفعال شده است');
     }
 
-    await this.sendOtp(dto.phone);
+    const code = await this.sendOtp(dto.phone);
 
     return {
       message: 'کد تأیید با موفقیت ارسال شد',
       phone: user.phone,
       isNewUser: false,
+      ...(process.env.NODE_ENV !== 'production' && { devCode: code }),
     };
   }
 
@@ -146,18 +212,20 @@ export class AuthService {
       throw new ForbiddenException('حساب کاربری شما غیرفعال شده است');
     }
 
-    await this.sendOtp(phone);
+    const code = await this.sendOtp(phone);
 
     return {
       message: 'کد تأیید ارسال شد',
       phone,
       isNewUser: !user,
+      ...(process.env.NODE_ENV !== 'production' && { devCode: code }),
     };
   }
 
   /**
-   * سناریوی تأیید کد OTP:
-   * بررسی صحت کد، تاریخ انقضا و تعداد دفعات اشتباه؛ در صورت صحت، کاربر لاگین می‌شود.
+   * سناریوی تأیید کد OTP و ورود:
+   * بررسی صحت کد، تاریخ انقضا و تعداد دفعات اشتباه؛
+   * در صورت صحت، کد باطل شده، نشست و توکن‌های ورود تولید می‌گردند.
    */
   async verifyOtp(dto: VerifyOtpDto) {
     const user = await this.prisma.user.findUnique({
@@ -213,6 +281,9 @@ export class AuthService {
       data: { usedAt: new Date() },
     });
 
+    // صدور توکن‌ها و ایجاد نشست
+    const tokens = await this.issueSession(user.id, user.phone, user.role);
+
     return {
       message: 'ورود با موفقیت انجام شد',
       user: {
@@ -221,6 +292,133 @@ export class AuthService {
         phone: user.phone,
         role: user.role,
       },
+      tokens,
     };
+  }
+
+  /**
+   * سناریوی تمدید توکن (Refresh Token Rotation):
+   * ۱. خواندن هش رفرش توکن از دیتابیس
+   * ۲. تشخیص استفاده مجدد (Re-use detection / دزدی توکن): اگر توکن قبلاً باطل شده بود، کلیه نشست‌های کاربر باطل می‌شوند.
+   * ۳. بررسی وضعیت کاربر و تاریخ انقضا
+   * ۴. باطل کردن توکن فعلی و ایجاد توکن جدید در یک Transaction
+   * ۵. تولید Access Token جدید
+   */
+  async refresh(rawRefreshToken?: string): Promise<{
+    accessToken: string;
+    refreshToken: string;
+  }> {
+    if (!rawRefreshToken) {
+      throw new UnauthorizedException('رفرش توکن یافت نشد');
+    }
+
+    const tokenHash = this.hashRefreshToken(rawRefreshToken);
+
+    const tokenRecord = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+
+    // ۱. رفرش توکن در دیتابیس یافت نشد
+    if (!tokenRecord) {
+      throw new UnauthorizedException('رفرش توکن نامعتبر است');
+    }
+
+    // ۲. تشخیص دزدی (Reuse Detection): اگر توکنی که قبلاً باطل شده استفاده شود،
+    // احتمالاً به سرقت رفته است؛ بنابراین کلیه رفرش توکن‌های آن کاربر فوراً باطل می‌شوند.
+    if (tokenRecord.revokedAt) {
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: tokenRecord.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      throw new UnauthorizedException(
+        'نشست نامعتبر شناسایی شد؛ به دلیل امنیتی کلیه نشست‌های فعال باطل شدند. لطفاً دوباره وارد شوید',
+      );
+    }
+
+    // ۳. بررسی فعال بودن حساب کاربر
+    if (!tokenRecord.user.isActive) {
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: tokenRecord.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      throw new UnauthorizedException('حساب کاربری شما غیرفعال شده است');
+    }
+
+    // ۴. بررسی تاریخ انقضای رفرش توکن
+    if (new Date() > tokenRecord.expiresAt) {
+      await this.prisma.refreshToken.update({
+        where: { id: tokenRecord.id },
+        data: { revokedAt: new Date() },
+      });
+      throw new UnauthorizedException('رفرش توکن منقضی شده است');
+    }
+
+    // ۵. چرخش توکن (Rotation): باطل کردن توکن قبلی و ساخت توکن جدید در یک Transaction
+    const newRawRefreshToken = this.generateRefreshToken();
+    const newTokenHash = this.hashRefreshToken(newRawRefreshToken);
+    const newExpiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS);
+
+    await this.prisma.$transaction([
+      this.prisma.refreshToken.update({
+        where: { id: tokenRecord.id },
+        data: { revokedAt: new Date() },
+      }),
+      this.prisma.refreshToken.create({
+        data: {
+          userId: tokenRecord.userId,
+          tokenHash: newTokenHash,
+          expiresAt: newExpiresAt,
+        },
+      }),
+    ]);
+
+    const newAccessToken = await this.generateAccessToken({
+      id: tokenRecord.user.id,
+      phone: tokenRecord.user.phone,
+      role: tokenRecord.user.role,
+    });
+
+    return {
+      accessToken: newAccessToken,
+      refreshToken: newRawRefreshToken,
+    };
+  }
+
+  /**
+   * سناریوی خروج (Logout):
+   * رفرش توکن فعلی دستگاه باطل می‌شود. در صورت نبود یا باطل بودن قبلی، باز هم موفق برمی‌گرداند (Idempotent).
+   */
+  async logout(rawRefreshToken?: string): Promise<{ message: string }> {
+    if (rawRefreshToken) {
+      const tokenHash = this.hashRefreshToken(rawRefreshToken);
+      await this.prisma.refreshToken.updateMany({
+        where: { tokenHash, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    }
+
+    return { message: 'با موفقیت خارج شدید' };
+  }
+
+  /**
+   * سناریوی دریافت اطلاعات کاربر وارد شده (Me)
+   */
+  async getMe(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('کاربر یافت نشد');
+    }
+
+    return user;
   }
 }

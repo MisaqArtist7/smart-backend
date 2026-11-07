@@ -47,3 +47,4 @@ export class AdminProductController {
     return this.productService.deleteProduct(id);
   }
 }
+

@@ -15,7 +15,12 @@ describe('CurrentUser Decorator (Step 2)', () => {
 
   it('1. باید کل آبجکت کاربر را از request.user برگرداند', () => {
     const factory = getParamDecoratorFactory(CurrentUser);
-    const mockUser = { id: 1, name: 'تست', phone: '09120000000', role: 'CUSTOMER' };
+    const mockUser = {
+      id: 1,
+      name: 'تست',
+      phone: '09120000000',
+      role: 'CUSTOMER',
+    };
     const mockContext = {
       switchToHttp: () => ({
         getRequest: () => ({ user: mockUser }),
@@ -28,7 +33,12 @@ describe('CurrentUser Decorator (Step 2)', () => {
 
   it('2. در صورت ارسال کلید مشخص، فقط همان فیلد را برگرداند', () => {
     const factory = getParamDecoratorFactory(CurrentUser);
-    const mockUser = { id: 1, name: 'تست', phone: '09120000000', role: 'CUSTOMER' };
+    const mockUser = {
+      id: 1,
+      name: 'تست',
+      phone: '09120000000',
+      role: 'CUSTOMER',
+    };
     const mockContext = {
       switchToHttp: () => ({
         getRequest: () => ({ user: mockUser }),

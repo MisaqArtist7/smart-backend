@@ -47,3 +47,4 @@ export class AdminCategoryController {
     return this.categoryService.remove(id);
   }
 }
+

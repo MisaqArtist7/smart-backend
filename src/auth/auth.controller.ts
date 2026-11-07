@@ -20,7 +20,10 @@ import {
   REFRESH_TOKEN_COOKIE,
   setAuthCookies,
 } from './auth.constants.js';
-import { CurrentUser } from './decorators/current-user.decorator.js';
+import {
+  CurrentUser,
+  type CurrentUserData,
+} from './decorators/current-user.decorator.js';
 import { Public } from './decorators/public.decorator.js';
 
 @Controller('auth')
@@ -87,20 +90,7 @@ export class AuthController {
   }
 
   @Get('me')
-  getMe(
-    @CurrentUser()
-    user: {
-      id: number;
-      name: string;
-      phone: string;
-      role: string;
-    },
-  ) {
-    return {
-      id: user.id,
-      name: user.name,
-      phone: user.phone,
-      role: user.role,
-    };
+  getMe(@CurrentUser() user: CurrentUserData) {
+    return user;
   }
 }

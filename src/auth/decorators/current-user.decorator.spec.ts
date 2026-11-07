@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ROUTE_ARGS_METADATA } from '@nestjs/common/constants.js';
-import { CurrentUser } from './current-user.decorator.js';
+import { InternalServerErrorException } from '@nestjs/common';
+import { CurrentUser, CurrentUserData } from './current-user.decorator.js';
 
 describe('CurrentUser Decorator (Step 2)', () => {
   function getParamDecoratorFactory(decorator: any) {
@@ -13,14 +14,15 @@ describe('CurrentUser Decorator (Step 2)', () => {
     return metadata[key].factory;
   }
 
-  it('1. باید کل آبجکت کاربر را از request.user برگرداند', () => {
+  const mockUser: CurrentUserData = {
+    id: 1,
+    name: 'تست',
+    phone: '09120000000',
+    role: 'CUSTOMER',
+  };
+
+  it('1. با ورود معتبر باید کل اطلاعات مجاز کاربر (id, name, phone, role) را برگرداند', () => {
     const factory = getParamDecoratorFactory(CurrentUser);
-    const mockUser = {
-      id: 1,
-      name: 'تست',
-      phone: '09120000000',
-      role: 'CUSTOMER',
-    };
     const mockContext = {
       switchToHttp: () => ({
         getRequest: () => ({ user: mockUser }),
@@ -31,14 +33,8 @@ describe('CurrentUser Decorator (Step 2)', () => {
     expect(result).toEqual(mockUser);
   });
 
-  it('2. در صورت ارسال کلید مشخص، فقط همان فیلد را برگرداند', () => {
+  it('2. اگر کلید خاصی مثل @CurrentUser("id") داده شود، فقط همان فیلد را برمی‌گرداند', () => {
     const factory = getParamDecoratorFactory(CurrentUser);
-    const mockUser = {
-      id: 1,
-      name: 'تست',
-      phone: '09120000000',
-      role: 'CUSTOMER',
-    };
     const mockContext = {
       switchToHttp: () => ({
         getRequest: () => ({ user: mockUser }),
@@ -47,5 +43,30 @@ describe('CurrentUser Decorator (Step 2)', () => {
 
     const result = factory('id', mockContext);
     expect(result).toBe(1);
+  });
+
+  it('3. اگر اسم فیلد "phone" داده شود، فقط شماره تلفن را برمی‌گرداند', () => {
+    const factory = getParamDecoratorFactory(CurrentUser);
+    const mockContext = {
+      switchToHttp: () => ({
+        getRequest: () => ({ user: mockUser }),
+      }),
+    };
+
+    const result = factory('phone', mockContext);
+    expect(result).toBe('09120000000');
+  });
+
+  it('4. اگر request.user وجود نداشته باشد (نبود گارد)، باید خطای خطای برنامه‌نویسی (500) بدهد', () => {
+    const factory = getParamDecoratorFactory(CurrentUser);
+    const mockContext = {
+      switchToHttp: () => ({
+        getRequest: () => ({ user: undefined }),
+      }),
+    };
+
+    expect(() => factory(undefined, mockContext)).toThrow(
+      InternalServerErrorException,
+    );
   });
 });

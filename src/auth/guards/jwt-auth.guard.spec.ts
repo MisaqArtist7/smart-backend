@@ -92,7 +92,12 @@ describe('JwtAuthGuard (Step 1)', () => {
 
     expect(canActivate).toBe(true);
     const req = context.switchToHttp().getRequest();
-    expect(req.user).toEqual(user);
+    expect(req.user).toEqual({
+      id: user.id,
+      name: user.name,
+      phone: user.phone,
+      role: user.role,
+    });
   });
 
   it('6. اگر مسیر @Public() باشد، باید بدون نیاز به توکن اجازه عبور دهد', async () => {

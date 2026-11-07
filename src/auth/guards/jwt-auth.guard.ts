@@ -10,6 +10,7 @@ import type { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ACCESS_TOKEN_COOKIE } from '../auth.constants.js';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator.js';
+import type { CurrentUserData } from '../decorators/current-user.decorator.js';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -67,8 +68,13 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('حساب کاربری شما غیرفعال شده است');
     }
 
-    // قرار دادن کاربر روی request
-    (request as Request & { user: typeof user }).user = user;
+    // قرار دادن کاربر روی request (فقط اطلاعات ایمن و بدون داده‌های حساس)
+    (request as Request & { user: CurrentUserData }).user = {
+      id: user.id,
+      name: user.name,
+      phone: user.phone,
+      role: user.role,
+    };
 
     return true;
   }

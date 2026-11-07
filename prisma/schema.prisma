@@ -146,6 +146,7 @@ enum PaymentMethod {
 
 enum PaymentStatus {
   PENDING
+  WAITING_REVIEW
   PAID
   FAILED
 }

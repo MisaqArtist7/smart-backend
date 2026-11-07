@@ -9,6 +9,7 @@ import { CategoryModule } from './categories/categories.module.js';
 import { ProductModule } from './product/product.module.js';
 import { SmsModule } from './sms/sms.module.js';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
+import { RolesGuard } from './auth/guards/roles.guard.js';
 
 @Module({
   imports: [
@@ -25,6 +26,10 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
   ],
 })

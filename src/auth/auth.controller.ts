@@ -25,6 +25,8 @@ import {
   type CurrentUserData,
 } from './decorators/current-user.decorator.js';
 import { Public } from './decorators/public.decorator.js';
+import { Roles } from './decorators/roles.decorator.js';
+import { Role } from '../generated/prisma/client.js';
 
 @Controller('auth')
 export class AuthController {
@@ -92,5 +94,11 @@ export class AuthController {
   @Get('me')
   getMe(@CurrentUser() user: CurrentUserData) {
     return user;
+  }
+
+  @Roles(Role.ADMIN)
+  @Get('admin-test')
+  adminTest() {
+    return { message: 'دسترسی ادمین تایید شد' };
   }
 }

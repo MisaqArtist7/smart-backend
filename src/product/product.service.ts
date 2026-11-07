@@ -17,16 +17,20 @@ const productInclude = {
 export class ProductService {
   constructor(private readonly prisma: PrismaService) {}
 
-  getAllProducts() {
+  getAllProducts(onlyActive = false) {
     return this.prisma.product.findMany({
+      where: onlyActive ? { isActive: true } : undefined,
       include: productInclude,
       orderBy: { id: 'desc' },
     });
   }
 
-  async getProduct(id: number) {
-    const product = await this.prisma.product.findUnique({
-      where: { id },
+  async getProduct(id: number, onlyActive = false) {
+    const product = await this.prisma.product.findFirst({
+      where: {
+        id,
+        ...(onlyActive ? { isActive: true } : {}),
+      },
       include: productInclude,
     });
     if (!product) throw new NotFoundException('Product not found');

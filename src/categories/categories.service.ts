@@ -22,16 +22,20 @@ export class CategoryService {
     return this.prisma.category.create({ data: dto, include: categoryInclude });
   }
 
-  findAll() {
+  findAll(onlyActive = false) {
     return this.prisma.category.findMany({
+      where: onlyActive ? { isActive: true } : undefined,
       include: categoryInclude,
       orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
     });
   }
 
-  async findOne(id: number) {
-    const category = await this.prisma.category.findUnique({
-      where: { id },
+  async findOne(id: number, onlyActive = false) {
+    const category = await this.prisma.category.findFirst({
+      where: {
+        id,
+        ...(onlyActive ? { isActive: true } : {}),
+      },
       include: categoryInclude,
     });
     if (!category) throw new NotFoundException('Category not found');

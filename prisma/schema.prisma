@@ -174,9 +174,14 @@ model Order {
   adminNote     String?       @db.Text
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+  paidAt        DateTime?
 
   items         OrderItem[]
+  
   @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([createdAt])
 }
 
 model OrderItem {

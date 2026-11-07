@@ -78,7 +78,9 @@ export class CategoryService {
   }
 
   private async assertParentExists(parentId: number) {
-    const parent = await this.prisma.category.findUnique({ where: { id: parentId } });
+    const parent = await this.prisma.category.findUnique({
+      where: { id: parentId },
+    });
     if (!parent) throw new BadRequestException('Parent category not found');
   }
 
@@ -91,7 +93,9 @@ export class CategoryService {
     let currentId: number | null = parentId;
     while (currentId !== null) {
       if (currentId === id) {
-        throw new BadRequestException('A category cannot be moved under its own subcategory');
+        throw new BadRequestException(
+          'A category cannot be moved under its own subcategory',
+        );
       }
       const node: { parentId: number | null } | null =
         await this.prisma.category.findUnique({

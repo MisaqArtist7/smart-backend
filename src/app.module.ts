@@ -9,7 +9,14 @@ import { ProductModule } from './product/product.module.js';
 import { SmsModule } from './sms/sms.module.js';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, CategoryModule, ProductModule, SmsModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule,
+    AuthModule,
+    CategoryModule,
+    ProductModule,
+    SmsModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

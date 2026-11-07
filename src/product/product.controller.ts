@@ -1,5 +1,12 @@
 import {
-  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
 } from '@nestjs/common';
 import { ProductService } from './product.service.js';
 import { CreateProductDto } from './dto/createProduct.tdo.js';

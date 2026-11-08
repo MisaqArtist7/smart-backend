@@ -7,12 +7,46 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ReceiptStorageService } from './receipt-storage.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
+import { GetMyOrdersDto } from './dto/get-my-orders.dto.js';
 import {
   OrderStatus,
   PaymentMethod,
   PaymentStatus,
 } from '../generated/prisma/client.js';
 import { generateOrderNumber } from './order.utils.js';
+
+export const customerOrderSelect = {
+  id: true,
+  userId: true,
+  orderNumber: true,
+  status: true,
+  paymentMethod: true,
+  paymentStatus: true,
+  receiptUrl: true,
+  itemsPrice: true,
+  shippingPrice: true,
+  totalPrice: true,
+  receiverName: true,
+  receiverPhone: true,
+  province: true,
+  city: true,
+  addressLine: true,
+  postalCode: true,
+  note: true,
+  trackingCode: true,
+  createdAt: true,
+  updatedAt: true,
+  paidAt: true,
+  items: {
+    select: {
+      id: true,
+      productId: true,
+      title: true,
+      price: true,
+      quantity: true,
+    },
+  },
+} as const;
 
 @Injectable()
 export class OrderService {
@@ -169,6 +203,58 @@ export class OrderService {
     // حذف یادداشت داخلی ادمین (adminNote) از پاسخی که به خریدار برگردانده می‌شود
     const { adminNote: _, ...customerSafeOrder } = order;
     return customerSafeOrder;
+  }
+
+  /**
+   * لیست سفارش‌های خریدار جاری به صورت صفحه‌بندی‌شده
+   * - مرتب‌سازی از جدیدترین به قدیمی‌ترین
+   * - بدون فیلد adminNote
+   */
+  async getMyOrders(userId: number, query: GetMyOrdersDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const skip = (page - 1) * limit;
+
+    const [orders, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where: { userId },
+        select: customerOrderSelect,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.order.count({
+        where: { userId },
+      }),
+    ]);
+
+    return {
+      data: orders,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || (total === 0 ? 0 : 1),
+      },
+    };
+  }
+
+  /**
+   * دریافت جزئیات یک سفارش توسط خریدار
+   * - فقط مالک سفارش؛ سفارش متعلق به دیگری یا ناموجود خطای 404 می‌دهد (نه 403)
+   * - بدون فیلد adminNote
+   */
+  async getMyOrderById(id: number, userId: number) {
+    const order = await this.prisma.order.findFirst({
+      where: { id, userId },
+      select: customerOrderSelect,
+    });
+
+    if (!order) {
+      throw new NotFoundException('سفارش یافت نشد');
+    }
+
+    return order;
   }
 
   /**

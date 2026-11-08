@@ -4,7 +4,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderService } from './order.service.js';
+import { customerOrderSelect, OrderService } from './order.service.js';
 import { generateOrderNumber, ORDER_NUMBER_ALPHABET } from './order.utils.js';
 import {
   OrderStatus,
@@ -12,7 +12,7 @@ import {
   PaymentStatus,
 } from '../generated/prisma/client.js';
 
-describe('OrderService - Phase 3 (Create Order)', () => {
+describe('OrderService - Order Module Tests', () => {
   let service: OrderService;
   let prisma: any;
   let storage: any;
@@ -25,6 +25,8 @@ describe('OrderService - Phase 3 (Create Order)', () => {
       order: {
         count: vi.fn(),
         findUnique: vi.fn(),
+        findFirst: vi.fn(),
+        findMany: vi.fn(),
         create: vi.fn(),
       },
       product: {
@@ -53,7 +55,7 @@ describe('OrderService - Phase 3 (Create Order)', () => {
     });
   });
 
-  describe('createOrder', () => {
+  describe('createOrder (Phase 3)', () => {
     const validDto = {
       addressId: 1,
       paymentMethod: 'CARD_TO_CARD' as const,
@@ -274,6 +276,99 @@ describe('OrderService - Phase 3 (Create Order)', () => {
     });
   });
 
+  describe('getMyOrders (Phase 4)', () => {
+    it('باید لیست سفارش‌های کاربر را به صورت صفحه‌بندی‌شده و مرتب‌شده نزولی بر اساس تاریخ برگرداند', async () => {
+      const mockOrders = [
+        {
+          id: 2,
+          orderNumber: 'SE-ORDER222',
+          itemsPrice: 100000,
+          totalPrice: 100000,
+          createdAt: new Date('2026-11-08T08:00:00Z'),
+          items: [],
+        },
+        {
+          id: 1,
+          orderNumber: 'SE-ORDER111',
+          itemsPrice: 200000,
+          totalPrice: 200000,
+          createdAt: new Date('2026-11-07T08:00:00Z'),
+          items: [],
+        },
+      ];
+
+      prisma.order.findMany.mockResolvedValue(mockOrders);
+      prisma.order.count.mockResolvedValue(25);
+
+      const result = await service.getMyOrders(100, { page: 2, limit: 10 });
+
+      expect(prisma.order.findMany).toHaveBeenCalledWith({
+        where: { userId: 100 },
+        select: customerOrderSelect,
+        orderBy: { createdAt: 'desc' },
+        skip: 10,
+        take: 10,
+      });
+
+      expect(result.data).toEqual(mockOrders);
+      expect(result.meta).toEqual({
+        total: 25,
+        page: 2,
+        limit: 10,
+        totalPages: 3,
+      });
+    });
+
+    it('در صورت خالی بودن لیست باید data خالی و totalPages صفر برگرداند', async () => {
+      prisma.order.findMany.mockResolvedValue([]);
+      prisma.order.count.mockResolvedValue(0);
+
+      const result = await service.getMyOrders(100, { page: 1, limit: 10 });
+
+      expect(result.data).toEqual([]);
+      expect(result.meta.total).toBe(0);
+      expect(result.meta.totalPages).toBe(0);
+    });
+  });
+
+  describe('getMyOrderById (Phase 4)', () => {
+    it('در صورتی که سفارش متعلق به کاربر باشد جزئیات آن را برمی‌گرداند', async () => {
+      const mockOrder = {
+        id: 10,
+        userId: 100,
+        orderNumber: 'SE-XYZ12345',
+        status: OrderStatus.PENDING,
+        itemsPrice: 50000,
+        totalPrice: 50000,
+        items: [],
+      };
+
+      prisma.order.findFirst.mockResolvedValue(mockOrder);
+
+      const result = await service.getMyOrderById(10, 100);
+
+      expect(prisma.order.findFirst).toHaveBeenCalledWith({
+        where: { id: 10, userId: 100 },
+        select: customerOrderSelect,
+      });
+      expect(result).toEqual(mockOrder);
+      expect(result).not.toHaveProperty('adminNote');
+    });
+
+    it('در صورتی که سفارش متعلق به کاربر دیگری باشد باید 404 بدهد (نه 403)', async () => {
+      // شبیه‌سازی: findFirst با شرط userId برابر 100 هیچ رکوردی پیدا نمی‌کند
+      prisma.order.findFirst.mockResolvedValue(null);
+
+      await expect(service.getMyOrderById(10, 100)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prisma.order.findFirst).toHaveBeenCalledWith({
+        where: { id: 10, userId: 100 },
+        select: customerOrderSelect,
+      });
+    });
+  });
+
   describe('getReceiptStreamForUser', () => {
     it('اگر سفارش متعلق به کاربر نباشد باید 404 بدهد', async () => {
       prisma.order.findUnique.mockResolvedValue({
@@ -318,4 +413,3 @@ describe('OrderService - Phase 3 (Create Order)', () => {
     });
   });
 });
-

@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { customerOrderSelect, OrderService } from './order.service.js';
-import { generateOrderNumber, ORDER_NUMBER_ALPHABET } from './order.utils.js';
+import { generateOrderNumber } from './order.utils.js';
 import {
   OrderStatus,
   PaymentMethod,
@@ -28,6 +28,7 @@ describe('OrderService - Order Module Tests', () => {
         findFirst: vi.fn(),
         findMany: vi.fn(),
         create: vi.fn(),
+        update: vi.fn(),
       },
       product: {
         findMany: vi.fn(),
@@ -39,6 +40,8 @@ describe('OrderService - Order Module Tests', () => {
     };
 
     storage = {
+      saveReceipt: vi.fn(),
+      deleteFile: vi.fn(),
       getReceiptStream: vi.fn(),
     };
 
@@ -366,6 +369,169 @@ describe('OrderService - Order Module Tests', () => {
         where: { id: 10, userId: 100 },
         select: customerOrderSelect,
       });
+    });
+  });
+
+  describe('uploadReceipt (Phase 5)', () => {
+    const mockFile: any = {
+      fieldname: 'receipt',
+      originalname: 'fish.jpg',
+      encoding: '7bit',
+      mimetype: 'image/jpeg',
+      size: 1024,
+      buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]),
+    };
+
+    it('۱. اگر فایل فیش ارسال نشده باشد باید خطای BadRequest دهد', async () => {
+      await expect(service.uploadReceipt(1, 100, undefined)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('۲. اگر سفارش متعلق به کاربر دیگری باشد باید خطای NotFound دهد و فایل آپلودشده را پاک کند', async () => {
+      storage.saveReceipt.mockResolvedValue({
+        relativePath: 'receipts/new-file.jpg',
+        mimeType: 'image/jpeg',
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        id: 1,
+        userId: 999, // کاربر دیگر
+        status: OrderStatus.PENDING,
+        paymentStatus: PaymentStatus.PENDING,
+      });
+
+      await expect(service.uploadReceipt(1, 100, mockFile)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(storage.deleteFile).toHaveBeenCalledWith('receipts/new-file.jpg');
+    });
+
+    it('۳. اگر وضعیت سفارش PENDING نباشد (مثلاً CANCELLED) باید خطای Conflict دهد', async () => {
+      storage.saveReceipt.mockResolvedValue({
+        relativePath: 'receipts/new-file.jpg',
+        mimeType: 'image/jpeg',
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        status: OrderStatus.CANCELLED,
+        paymentStatus: PaymentStatus.PENDING,
+      });
+
+      await expect(service.uploadReceipt(1, 100, mockFile)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(storage.deleteFile).toHaveBeenCalledWith('receipts/new-file.jpg');
+    });
+
+    it('۴. اگر وضعیت پرداخت قبلاً WAITING_REVIEW باشد باید خطای Conflict دهد', async () => {
+      storage.saveReceipt.mockResolvedValue({
+        relativePath: 'receipts/new-file.jpg',
+        mimeType: 'image/jpeg',
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        status: OrderStatus.PENDING,
+        paymentStatus: PaymentStatus.WAITING_REVIEW,
+      });
+
+      await expect(service.uploadReceipt(1, 100, mockFile)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(storage.deleteFile).toHaveBeenCalledWith('receipts/new-file.jpg');
+    });
+
+    it('۵. اگر وضعیت پرداخت قبلاً PAID باشد باید خطای Conflict دهد', async () => {
+      storage.saveReceipt.mockResolvedValue({
+        relativePath: 'receipts/new-file.jpg',
+        mimeType: 'image/jpeg',
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        status: OrderStatus.PENDING,
+        paymentStatus: PaymentStatus.PAID,
+      });
+
+      await expect(service.uploadReceipt(1, 100, mockFile)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(storage.deleteFile).toHaveBeenCalledWith('receipts/new-file.jpg');
+    });
+
+    it('۶. آپلود موفق اولیه (وضعیت PENDING): ثبت فایل جدید و تغییر وضعیت به WAITING_REVIEW', async () => {
+      storage.saveReceipt.mockResolvedValue({
+        relativePath: 'receipts/new-file.jpg',
+        mimeType: 'image/jpeg',
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        status: OrderStatus.PENDING,
+        paymentStatus: PaymentStatus.PENDING,
+        receiptUrl: null,
+      });
+
+      const updatedOrder = {
+        id: 1,
+        userId: 100,
+        status: OrderStatus.PENDING,
+        paymentStatus: PaymentStatus.WAITING_REVIEW,
+        receiptUrl: 'receipts/new-file.jpg',
+      };
+      prisma.order.update.mockResolvedValue(updatedOrder);
+
+      const result = await service.uploadReceipt(1, 100, mockFile);
+
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: {
+          receiptUrl: 'receipts/new-file.jpg',
+          paymentStatus: PaymentStatus.WAITING_REVIEW,
+        },
+        select: customerOrderSelect,
+      });
+      expect(result).toEqual(updatedOrder);
+      // چون فیش قبلی وجود نداشت، deleteFile برای فایل قدیمی فراخوانی نمی‌شود
+      expect(storage.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('۷. آپلود مجدد موفق پس از رد شدن (وضعیت FAILED): پاک شدن فیش قدیمی پس از موفقیت ترنزکشن', async () => {
+      storage.saveReceipt.mockResolvedValue({
+        relativePath: 'receipts/new-file-2.jpg',
+        mimeType: 'image/jpeg',
+      });
+      prisma.order.findUnique.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        status: OrderStatus.PENDING,
+        paymentStatus: PaymentStatus.FAILED,
+        receiptUrl: 'receipts/old-rejected-file.jpg',
+      });
+
+      const updatedOrder = {
+        id: 1,
+        userId: 100,
+        status: OrderStatus.PENDING,
+        paymentStatus: PaymentStatus.WAITING_REVIEW,
+        receiptUrl: 'receipts/new-file-2.jpg',
+      };
+      prisma.order.update.mockResolvedValue(updatedOrder);
+
+      const result = await service.uploadReceipt(1, 100, mockFile);
+
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: {
+          receiptUrl: 'receipts/new-file-2.jpg',
+          paymentStatus: PaymentStatus.WAITING_REVIEW,
+        },
+        select: customerOrderSelect,
+      });
+      expect(result).toEqual(updatedOrder);
+      // فایل قبلی ردشده باید پس از موفقیت دیتابیس پاک شود
+      expect(storage.deleteFile).toHaveBeenCalledWith('receipts/old-rejected-file.jpg');
     });
   });
 

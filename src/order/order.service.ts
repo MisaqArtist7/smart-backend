@@ -5,7 +5,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { ReceiptStorageService } from './receipt-storage.service.js';
+import {
+  ReceiptStorageService,
+  type UploadedReceiptFile,
+} from './receipt-storage.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { GetMyOrdersDto } from './dto/get-my-orders.dto.js';
 import {
@@ -255,6 +258,88 @@ export class OrderService {
     }
 
     return order;
+  }
+
+  /**
+   * آپلود و ثبت تصویر فیش واریزی توسط خریدار (Phase 5)
+   * - فقط مالک سفارش مجاز است؛ در غیر این صورت خطای 404 برمی‌گردد
+   * - فقط برای سفارش در وضعیت PENDING و وضعیت پرداخت PENDING یا FAILED مجاز است
+   * - آپلود مجدد در وضعیت WAITING_REVIEW یا PAID خطای 409 می‌دهد
+   * - در صورت وجود فیش قبلی، فایل قبلی پس از به‌روزرسانی موفق دیتابیس پاک می‌شود
+   * - بدون فیلد adminNote در پاسخ خروجی
+   */
+  async uploadReceipt(
+    orderId: number,
+    userId: number,
+    file?: UploadedReceiptFile,
+  ) {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('فایل فیش واریزی ارسال نشده است');
+    }
+
+    // ذخیره فایل در دیسک با اعتبارسنجی حجم و بایت‌های جادویی
+    const savedFile = await this.storage.saveReceipt(file);
+    let oldReceiptUrl: string | null = null;
+
+    try {
+      const updatedOrder = await this.prisma.$transaction(async (tx) => {
+        const order = await tx.order.findUnique({
+          where: { id: orderId },
+        });
+
+        if (!order || order.userId !== userId) {
+          throw new NotFoundException('سفارش یافت نشد');
+        }
+
+        if (order.status !== OrderStatus.PENDING) {
+          throw new ConflictException(
+            'امکان آپلود فیش برای سفارش‌های لغوشده یا تاییدشده وجود ندارد',
+          );
+        }
+
+        if (
+          order.paymentStatus === PaymentStatus.WAITING_REVIEW ||
+          order.paymentStatus === PaymentStatus.PAID
+        ) {
+          throw new ConflictException(
+            order.paymentStatus === PaymentStatus.PAID
+              ? 'این سفارش قبلاً پرداخت شده است'
+              : 'فیش واریزی این سفارش قبلاً ثبت شده و در انتظار بررسی است',
+          );
+        }
+
+        if (
+          order.paymentStatus !== PaymentStatus.PENDING &&
+          order.paymentStatus !== PaymentStatus.FAILED
+        ) {
+          throw new ConflictException(
+            'وضعیت پرداخت سفارش برای آپلود فیش نامعتبر است',
+          );
+        }
+
+        oldReceiptUrl = order.receiptUrl;
+
+        return tx.order.update({
+          where: { id: orderId },
+          data: {
+            receiptUrl: savedFile.relativePath,
+            paymentStatus: PaymentStatus.WAITING_REVIEW,
+          },
+          select: customerOrderSelect,
+        });
+      });
+
+      // حذف فایل فیش قبلی پس از موفقیت قطعی ترنزکشن دیتابیس
+      if (oldReceiptUrl) {
+        await this.storage.deleteFile(oldReceiptUrl);
+      }
+
+      return updatedOrder;
+    } catch (error) {
+      // در صورت بروز خطا در دیتابیس، فایل جدید را پاک می‌کنیم تا فایل بی‌استفاده در دیسک نماند
+      await this.storage.deleteFile(savedFile.relativePath);
+      throw error;
+    }
   }
 
   /**

@@ -9,8 +9,11 @@ import {
   Post,
   Query,
   Res,
+  UploadedFile,
+  UseInterceptors,
   ValidationPipe,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { OrderService } from './order.service.js';
 import {
@@ -19,6 +22,7 @@ import {
 } from '../auth/decorators/current-user.decorator.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { GetMyOrdersDto } from './dto/get-my-orders.dto.js';
+import type { UploadedReceiptFile } from './receipt-storage.service.js';
 
 @Controller('orders')
 export class OrderController {
@@ -54,6 +58,16 @@ export class OrderController {
     @CurrentUser() user: CurrentUserData,
   ) {
     return this.orderService.getMyOrderById(id, user.id);
+  }
+
+  @Post(':id/receipt')
+  @UseInterceptors(FileInterceptor('receipt'))
+  async uploadReceipt(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: CurrentUserData,
+    @UploadedFile() file?: UploadedReceiptFile,
+  ) {
+    return this.orderService.uploadReceipt(id, user.id, file);
   }
 
   @Get(':id/receipt')

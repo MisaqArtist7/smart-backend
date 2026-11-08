@@ -29,7 +29,10 @@ const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 @Injectable()
 export class ReceiptStorageService implements OnModuleInit {
-  private readonly baseStorageDir = path.resolve(process.cwd(), 'storage');
+  private readonly baseStorageDir = path.resolve(
+    process.cwd(),
+    'private-uploads',
+  );
   private readonly receiptsDir = path.join(this.baseStorageDir, 'receipts');
 
   async onModuleInit() {
@@ -38,6 +41,7 @@ export class ReceiptStorageService implements OnModuleInit {
 
   /**
    * بررسی امضای واقعی فایل (Magic Bytes)
+   * برای جلوگیری از تغییر پسوند فایل‌های مخرب یا متن‌های ساده به پسوند عکس
    */
   detectMagicBytes(buffer: Buffer): SupportedImageMime | null {
     if (!buffer || buffer.length < 12) {
@@ -81,9 +85,13 @@ export class ReceiptStorageService implements OnModuleInit {
   }
 
   /**
-   * ذخیره تصویر فیش واریزی با نام تصادفی سرور
+   * متد عمومی و قابل استفاده مجدد برای ذخیره هر نوع فایل تصویر در زیرپوشه دلخواه
+   * (مثلاً receipts یا در آینده product-images)
    */
-  async saveReceipt(file?: UploadedReceiptFile): Promise<{
+  async saveFile(
+    file?: UploadedReceiptFile,
+    subDir: string = 'receipts',
+  ): Promise<{
     relativePath: string;
     mimeType: SupportedImageMime;
   }> {
@@ -109,18 +117,31 @@ export class ReceiptStorageService implements OnModuleInit {
 
     const ext = MIME_TO_EXT[detectedMime];
     const filename = `${randomUUID()}${ext}`;
-    const targetPath = path.join(this.receiptsDir, filename);
 
+    const targetDir = path.join(this.baseStorageDir, subDir);
+    await fs.promises.mkdir(targetDir, { recursive: true });
+
+    const targetPath = path.join(targetDir, filename);
     await fs.promises.writeFile(targetPath, file.buffer);
 
     return {
-      relativePath: path.join('receipts', filename),
+      relativePath: path.join(subDir, filename),
       mimeType: detectedMime,
     };
   }
 
   /**
-   * حذف ایمن فیش قبلی
+   * ذخیره تصویر فیش واریزی در زیرپوشه receipts
+   */
+  async saveReceipt(file?: UploadedReceiptFile): Promise<{
+    relativePath: string;
+    mimeType: SupportedImageMime;
+  }> {
+    return this.saveFile(file, 'receipts');
+  }
+
+  /**
+   * حذف ایمن یک فایل از حافظه دیسک
    */
   async deleteFile(relativePath?: string | null): Promise<void> {
     if (!relativePath) return;
@@ -128,12 +149,12 @@ export class ReceiptStorageService implements OnModuleInit {
       const fullPath = this.resolveFullPath(relativePath);
       await fs.promises.unlink(fullPath);
     } catch {
-      // نادیده گرفتن در صورت عدم وجود یا خطای حذف
+      // نادیده گرفتن در صورت عدم وجود فیزیکی یا خطای حذف
     }
   }
 
   /**
-   * تبدیل مسیر نسبی به مسیر مطلق و جلوگیری از Path Traversal
+   * تبدیل مسیر نسبی ذخیره‌شده به مسیر مطلق روی سرور با حفاظت کامل از Path Traversal
    */
   resolveFullPath(relativePath: string): string {
     const cleanRelative = path
@@ -143,9 +164,9 @@ export class ReceiptStorageService implements OnModuleInit {
   }
 
   /**
-   * خواندن فایل فیش برای سرو کردن امن
+   * بازگرداندن استریم خواندن فایل همراه با تشخیص خودکار نوع MIME
    */
-  async getReceiptStream(relativePath: string): Promise<{
+  async getFileStream(relativePath: string): Promise<{
     stream: fs.ReadStream;
     mimeType: SupportedImageMime;
   }> {
@@ -156,7 +177,7 @@ export class ReceiptStorageService implements OnModuleInit {
       throw new NotFoundException('فایل فیش واریزی در سرور یافت نشد');
     }
 
-    // خواندن ۱۲ بایت ابتدایی برای تشخیص MIME
+    // خواندن ۱۲ بایت ابتدایی فایل برای تشخیص بایت‌های جادویی
     const fd = await fs.promises.open(fullPath, 'r');
     const headerBuffer = Buffer.alloc(12);
     await fd.read(headerBuffer, 0, 12, 0);
@@ -169,5 +190,14 @@ export class ReceiptStorageService implements OnModuleInit {
       mimeType: detectedMime,
     };
   }
-}
 
+  /**
+   * خواندن استریم فیش واریزی
+   */
+  async getReceiptStream(relativePath: string): Promise<{
+    stream: fs.ReadStream;
+    mimeType: SupportedImageMime;
+  }> {
+    return this.getFileStream(relativePath);
+  }
+}

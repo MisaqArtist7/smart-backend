@@ -17,7 +17,7 @@ describe('ReceiptStorageService (Phase 2)', () => {
 
   afterEach(async () => {
     // پاک‌سازی فایل‌های آزمایشی ساخته‌شده
-    const receiptsDir = path.resolve(process.cwd(), 'storage', 'receipts');
+    const receiptsDir = path.resolve(process.cwd(), 'private-uploads', 'receipts');
     try {
       const files = await fs.promises.readdir(receiptsDir);
       for (const file of files) {

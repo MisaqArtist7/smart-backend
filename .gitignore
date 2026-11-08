@@ -78,3 +78,6 @@ build/**
 *.swp
 *.swo
 Thumbs.db
+
+# Uploaded private storage
+/storage

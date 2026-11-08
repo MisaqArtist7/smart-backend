@@ -379,7 +379,9 @@ describe('OrderService - Order Module Tests', () => {
       encoding: '7bit',
       mimetype: 'image/jpeg',
       size: 1024,
-      buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]),
+      buffer: Buffer.from([
+        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+      ]),
     };
 
     it('۱. اگر فایل فیش ارسال نشده باشد باید خطای BadRequest دهد', async () => {
@@ -531,7 +533,247 @@ describe('OrderService - Order Module Tests', () => {
       });
       expect(result).toEqual(updatedOrder);
       // فایل قبلی ردشده باید پس از موفقیت دیتابیس پاک شود
-      expect(storage.deleteFile).toHaveBeenCalledWith('receipts/old-rejected-file.jpg');
+      expect(storage.deleteFile).toHaveBeenCalledWith(
+        'receipts/old-rejected-file.jpg',
+      );
+    });
+  });
+
+  describe('Admin Order Management (Phase 6)', () => {
+    describe('getAdminOrders', () => {
+      it('باید لیست سفارش‌ها را با فیلترها و اطلاعات کاربر و اقلام بازگرداند', async () => {
+        const mockOrders = [
+          {
+            id: 1,
+            orderNumber: 'SE-ABC12345',
+            receiverPhone: '09121111111',
+            status: OrderStatus.CONFIRMED,
+            paymentStatus: PaymentStatus.PAID,
+            user: { id: 10, name: 'کاربر ۱', phone: '09121111111' },
+            items: [],
+          },
+        ];
+        prisma.order.findMany.mockResolvedValue(mockOrders);
+        prisma.order.count.mockResolvedValue(1);
+
+        const result = await service.getAdminOrders({
+          status: OrderStatus.CONFIRMED,
+          paymentStatus: PaymentStatus.PAID,
+          search: 'SE-ABC',
+          dateFrom: '2026-11-01T00:00:00Z',
+          dateTo: '2026-11-08T23:59:59Z',
+          page: 1,
+          limit: 10,
+        });
+
+        expect(prisma.order.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              status: OrderStatus.CONFIRMED,
+              paymentStatus: PaymentStatus.PAID,
+              OR: [
+                { orderNumber: { contains: 'SE-ABC', mode: 'insensitive' } },
+                { receiverPhone: { contains: 'SE-ABC' } },
+              ],
+            }),
+            orderBy: { createdAt: 'desc' },
+            skip: 0,
+            take: 10,
+          }),
+        );
+        expect(result.data).toEqual(mockOrders);
+        expect(result.meta.total).toBe(1);
+      });
+    });
+
+    describe('getAdminOrderById', () => {
+      it('باید جزئیات کامل سفارش شامل adminNote را بازگرداند', async () => {
+        const mockOrder = {
+          id: 5,
+          orderNumber: 'SE-ADMIN001',
+          adminNote: 'یادداشت ادمین',
+          user: { id: 10, name: 'کاربر', phone: '09120000000' },
+          items: [],
+        };
+        prisma.order.findUnique.mockResolvedValue(mockOrder);
+
+        const result = await service.getAdminOrderById(5);
+        expect(result).toEqual(mockOrder);
+        expect(result.adminNote).toBe('یادداشت ادمین');
+      });
+
+      it('در صورت پیدا نشدن سفارش باید 404 بدهد', async () => {
+        prisma.order.findUnique.mockResolvedValue(null);
+
+        await expect(service.getAdminOrderById(999)).rejects.toThrow(
+          NotFoundException,
+        );
+      });
+    });
+
+    describe('updatePaymentStatus', () => {
+      it('در صورتی که وضعیت پرداخت WAITING_REVIEW نباشد باید 409 بدهد', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          paymentStatus: PaymentStatus.PENDING, // در انتظار فیش است نه در انتظار بررسی
+        });
+
+        await expect(
+          service.updatePaymentStatus(1, { action: 'approve' }),
+        ).rejects.toThrow(ConflictException);
+      });
+
+      it('تایید پرداخت (approve): باید وضعیت را به CONFIRMED و پرداخت را به PAID تغییر دهد و paidAt را ست کند', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          paymentStatus: PaymentStatus.WAITING_REVIEW,
+          status: OrderStatus.PENDING,
+        });
+
+        const updatedOrder = {
+          id: 1,
+          status: OrderStatus.CONFIRMED,
+          paymentStatus: PaymentStatus.PAID,
+          paidAt: new Date(),
+          adminNote: 'فیش تایید شد',
+        };
+        prisma.order.update.mockResolvedValue(updatedOrder);
+
+        const result = await service.updatePaymentStatus(1, {
+          action: 'approve',
+          adminNote: 'فیش تایید شد',
+        });
+
+        expect(prisma.order.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 1 },
+            data: expect.objectContaining({
+              status: OrderStatus.CONFIRMED,
+              paymentStatus: PaymentStatus.PAID,
+              adminNote: 'فیش تایید شد',
+            }),
+          }),
+        );
+        expect(result).toEqual(updatedOrder);
+      });
+
+      it('رد پرداخت (reject): باید وضعیت پرداخت را به FAILED تغییر دهد', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          paymentStatus: PaymentStatus.WAITING_REVIEW,
+          status: OrderStatus.PENDING,
+        });
+
+        const updatedOrder = {
+          id: 1,
+          status: OrderStatus.PENDING,
+          paymentStatus: PaymentStatus.FAILED,
+          adminNote: 'مبلغ فیش ناقص بود',
+        };
+        prisma.order.update.mockResolvedValue(updatedOrder);
+
+        const result = await service.updatePaymentStatus(1, {
+          action: 'reject',
+          adminNote: 'مبلغ فیش ناقص بود',
+        });
+
+        expect(prisma.order.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 1 },
+            data: expect.objectContaining({
+              paymentStatus: PaymentStatus.FAILED,
+              adminNote: 'مبلغ فیش ناقص بود',
+            }),
+          }),
+        );
+        expect(result).toEqual(updatedOrder);
+      });
+    });
+
+    describe('updateOrderStatus', () => {
+      it('انتقال غیرمجاز وضعیت (مثلاً PENDING -> SHIPPED یا CONFIRMED -> DELIVERED) باید خطای Conflict بدهد', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          status: OrderStatus.CONFIRMED,
+          paymentStatus: PaymentStatus.PAID,
+        });
+
+        // از CONFIRMED نمی‌توان مستقیم به DELIVERED رفت (باید اول SHIPPED شود)
+        await expect(
+          service.updateOrderStatus(1, { status: OrderStatus.DELIVERED }),
+        ).rejects.toThrow(ConflictException);
+      });
+
+      it('انتقال به SHIPPED بدون پرداخت موفق (PAID) باید خطای Conflict بدهد', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          status: OrderStatus.CONFIRMED,
+          paymentStatus: PaymentStatus.PENDING, // هنوز PAID نشده
+        });
+
+        await expect(
+          service.updateOrderStatus(1, { status: OrderStatus.SHIPPED }),
+        ).rejects.toThrow(ConflictException);
+      });
+
+      it('انتقال مجاز CONFIRMED -> SHIPPED هنگامی که پرداخت PAID است', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          status: OrderStatus.CONFIRMED,
+          paymentStatus: PaymentStatus.PAID,
+        });
+
+        const updatedOrder = {
+          id: 1,
+          status: OrderStatus.SHIPPED,
+          trackingCode: '1234567890123456',
+        };
+        prisma.order.update.mockResolvedValue(updatedOrder);
+
+        const result = await service.updateOrderStatus(1, {
+          status: OrderStatus.SHIPPED,
+          trackingCode: '1234567890123456',
+        });
+
+        expect(prisma.order.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 1 },
+            data: expect.objectContaining({
+              status: OrderStatus.SHIPPED,
+              trackingCode: '1234567890123456',
+            }),
+          }),
+        );
+        expect(result).toEqual(updatedOrder);
+      });
+
+      it('انتقال مجاز SHIPPED -> DELIVERED', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          status: OrderStatus.SHIPPED,
+          paymentStatus: PaymentStatus.PAID,
+        });
+
+        const updatedOrder = {
+          id: 1,
+          status: OrderStatus.DELIVERED,
+        };
+        prisma.order.update.mockResolvedValue(updatedOrder);
+
+        const result = await service.updateOrderStatus(1, {
+          status: OrderStatus.DELIVERED,
+        });
+
+        expect(prisma.order.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 1 },
+            data: expect.objectContaining({
+              status: OrderStatus.DELIVERED,
+            }),
+          }),
+        );
+        expect(result).toEqual(updatedOrder);
+      });
     });
   });
 

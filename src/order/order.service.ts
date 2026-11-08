@@ -11,6 +11,9 @@ import {
 } from './receipt-storage.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { GetMyOrdersDto } from './dto/get-my-orders.dto.js';
+import { AdminGetOrdersDto } from './dto/admin-get-orders.dto.js';
+import { UpdatePaymentDto } from './dto/update-payment.dto.js';
+import { UpdateOrderStatusDto } from './dto/update-order-status.dto.js';
 import {
   OrderStatus,
   PaymentMethod,
@@ -50,6 +53,22 @@ export const customerOrderSelect = {
     },
   },
 } as const;
+
+/**
+ * نقشه صریح انتقال وضعیت‌های سفارش توسط ادمین
+ * CONFIRMED -> SHIPPED
+ * SHIPPED -> DELIVERED
+ */
+export const ALLOWED_ADMIN_STATUS_TRANSITIONS: Record<
+  OrderStatus,
+  OrderStatus[]
+> = {
+  [OrderStatus.PENDING]: [],
+  [OrderStatus.CONFIRMED]: [OrderStatus.SHIPPED],
+  [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],
+  [OrderStatus.DELIVERED]: [],
+  [OrderStatus.CANCELLED]: [],
+};
 
 @Injectable()
 export class OrderService {
@@ -385,5 +404,199 @@ export class OrderService {
     }
 
     return this.storage.getReceiptStream(order.receiptUrl);
+  }
+
+  /**
+   * لیست سفارش‌ها در پنل ادمین (Phase 6)
+   * - فیلتر بر اساس status، paymentStatus، search، dateFrom، dateTo
+   * - صفحه‌بندی و مرتب‌سازی جدیدترین به قدیمی‌ترین
+   * - شامل نام و شماره تماس کاربر خریدار
+   */
+  async getAdminOrders(query: AdminGetOrdersDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+
+    if (query.status) {
+      where.status = query.status;
+    }
+
+    if (query.paymentStatus) {
+      where.paymentStatus = query.paymentStatus;
+    }
+
+    if (query.search) {
+      const search = query.search.trim();
+      where.OR = [
+        { orderNumber: { contains: search, mode: 'insensitive' } },
+        { receiverPhone: { contains: search } },
+      ];
+    }
+
+    if (query.dateFrom || query.dateTo) {
+      where.createdAt = {};
+      if (query.dateFrom) {
+        where.createdAt.gte = new Date(query.dateFrom);
+      }
+      if (query.dateTo) {
+        where.createdAt.lte = new Date(query.dateTo);
+      }
+    }
+
+    const [orders, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        include: {
+          user: {
+            select: { id: true, name: true, phone: true },
+          },
+          items: true,
+        },
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+
+    return {
+      data: orders,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || (total === 0 ? 0 : 1),
+      },
+    };
+  }
+
+  /**
+   * مشاهده جزئیات کامل سفارش در پنل ادمین شامل adminNote (Phase 6)
+   */
+  async getAdminOrderById(orderId: number) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        user: {
+          select: { id: true, name: true, phone: true },
+        },
+        items: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('سفارش یافت نشد');
+    }
+
+    return order;
+  }
+
+  /**
+   * تایید یا رد پرداخت سفارش توسط ادمین (Phase 6)
+   * - فقط برای سفارش‌های در وضعیت WAITING_REVIEW مجاز است (در غیر این صورت 409)
+   * - approve: تبدیل وضعیت پرداخت به PAID، ثبت زمان paidAt و وضعیت سفارش به CONFIRMED
+   * - reject: تبدیل وضعیت پرداخت به FAILED (خریدار امکان آپلود مجدد فیش پیدا می‌کند)
+   */
+  async updatePaymentStatus(orderId: number, dto: UpdatePaymentDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+      });
+
+      if (!order) {
+        throw new NotFoundException('سفارش یافت نشد');
+      }
+
+      if (order.paymentStatus !== PaymentStatus.WAITING_REVIEW) {
+        throw new ConflictException(
+          'تغییر وضعیت پرداخت فقط برای سفارش‌های در انتظار بررسی (WAITING_REVIEW) مجاز است',
+        );
+      }
+
+      if (dto.action === 'approve') {
+        return tx.order.update({
+          where: { id: orderId },
+          data: {
+            paymentStatus: PaymentStatus.PAID,
+            paidAt: new Date(),
+            status: OrderStatus.CONFIRMED,
+            ...(dto.adminNote !== undefined
+              ? { adminNote: dto.adminNote.trim() }
+              : {}),
+          },
+          include: {
+            user: { select: { id: true, name: true, phone: true } },
+            items: true,
+          },
+        });
+      } else {
+        return tx.order.update({
+          where: { id: orderId },
+          data: {
+            paymentStatus: PaymentStatus.FAILED,
+            ...(dto.adminNote !== undefined
+              ? { adminNote: dto.adminNote.trim() }
+              : {}),
+          },
+          include: {
+            user: { select: { id: true, name: true, phone: true } },
+            items: true,
+          },
+        });
+      }
+    });
+  }
+
+  /**
+   * تغییر وضعیت فرآیند سفارش توسط ادمین با نقشه صریح (Phase 6)
+   * - فقط انتقال‌های CONFIRMED -> SHIPPED و SHIPPED -> DELIVERED مجاز هستند
+   * - انتقال به SHIPPED نیازمند وضعیت پرداخت PAID است
+   */
+  async updateOrderStatus(orderId: number, dto: UpdateOrderStatusDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+      });
+
+      if (!order) {
+        throw new NotFoundException('سفارش یافت نشد');
+      }
+
+      const allowedTransitions =
+        ALLOWED_ADMIN_STATUS_TRANSITIONS[order.status] || [];
+      if (!allowedTransitions.includes(dto.status)) {
+        throw new ConflictException(
+          `تغییر وضعیت سفارش از ${order.status} به ${dto.status} مجاز نمی‌باشد`,
+        );
+      }
+
+      if (
+        dto.status === OrderStatus.SHIPPED &&
+        order.paymentStatus !== PaymentStatus.PAID
+      ) {
+        throw new ConflictException(
+          'ارسال سفارش (SHIPPED) نیازمند تایید پرداخت موفق (PAID) می‌باشد',
+        );
+      }
+
+      return tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: dto.status,
+          ...(dto.trackingCode !== undefined
+            ? { trackingCode: dto.trackingCode.trim() }
+            : {}),
+          ...(dto.adminNote !== undefined
+            ? { adminNote: dto.adminNote.trim() }
+            : {}),
+        },
+        include: {
+          user: { select: { id: true, name: true, phone: true } },
+          items: true,
+        },
+      });
+    });
   }
 }

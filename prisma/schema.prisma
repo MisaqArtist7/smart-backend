@@ -27,8 +27,9 @@ model User {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
-  orders        Order[]
-  addresses     Address[]
+  orders          Order[]
+  addresses       Address[]
+  contactMessages ContactMessage[]
 }
 
 model Otp {
@@ -196,4 +197,38 @@ model OrderItem {
 
   @@index([orderId])
   @@index([productId])
+}
+
+enum ContactSubject {
+  ORDER_ISSUE
+  PAYMENT_ISSUE
+  PRODUCT_QUESTION
+  DELIVERY_ISSUE
+  OTHER
+}
+
+enum ContactStatus {
+  NEW
+  IN_PROGRESS
+  DONE
+}
+
+model ContactMessage {
+  id        Int            @id @default(autoincrement())
+  fullName  String         @db.VarChar(100)
+  phone     String         @db.VarChar(11)
+  subject   ContactSubject
+  message   String         @db.Text
+  status    ContactStatus  @default(NEW)
+  adminNote String?        @db.Text
+  user      User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    Int?
+  ipHash    String?        @db.VarChar(64)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([status, createdAt])
+  @@index([phone])
+  @@index([userId])
+  @@index([ipHash, createdAt])
 }

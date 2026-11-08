@@ -33,6 +33,13 @@ export class CategoryController {
   }
 
   @Public()
+  @Get('slug/:slug')
+  findBySlug(@Param('slug') slug: string) {
+    // مسیر عمومی: اگر غیرفعال باشد خطای 404 صادر می‌شود
+    return this.categoryService.findBySlug(slug, false);
+  }
+
+  @Public()
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     // اگر غیرفعال باشد خطای 404 صادر می‌شود

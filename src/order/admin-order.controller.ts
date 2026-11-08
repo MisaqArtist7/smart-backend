@@ -78,7 +78,7 @@ export class AdminOrderController {
     const { stream, mimeType } =
       await this.orderService.getReceiptStreamForAdmin(id);
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Cache-Control', 'private, no-cache');
+    res.setHeader('Cache-Control', 'private, no-store');
     stream.pipe(res);
   }
 }

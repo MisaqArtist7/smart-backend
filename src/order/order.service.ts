@@ -251,13 +251,10 @@ export class OrderService {
     ]);
 
     return {
-      data: orders,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit) || (total === 0 ? 0 : 1),
-      },
+      items: orders,
+      total,
+      page,
+      limit,
     };
   }
 
@@ -461,14 +458,19 @@ export class OrderService {
       this.prisma.order.count({ where }),
     ]);
 
+    const mappedItems = orders.map((order) => {
+      const { receiptUrl, ...rest } = order;
+      return {
+        ...rest,
+        hasReceipt: Boolean(receiptUrl),
+      };
+    });
+
     return {
-      data: orders,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit) || (total === 0 ? 0 : 1),
-      },
+      items: mappedItems,
+      total,
+      page,
+      limit,
     };
   }
 

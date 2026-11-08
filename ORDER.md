@@ -12,7 +12,7 @@
 5. **شناسه سفارش (`orderNumber`):** با پیشوند `SE-` و ۸ کاراکتر از الفبای ۳۲ تایی بدون ابهام (`23456789ABCDEFGHJKLMNPQRSTUVWXYZ`) با `crypto` تولید می‌شود.
 6. **اسنپ‌شات آدرس:** مقادیر `receiverName`, `receiverPhone`, `province`, `city`, `addressLine`, `postalCode` مستقیماً روی رکورد سفارش ذخیره می‌شوند.
 7. **محرمانگی یادداشت ادمین (`adminNote`):** فیلد `adminNote` هرگز در هیچ پاسخی به خریدار بازگردانده نمی‌شود.
-8. **امنیت فیش واریزی:** فیش‌ها در پوشه خصوصی `storage/receipts/` نگهداری شده و فقط با بایت‌های جادویی معتبر (JPEG, PNG, WebP) و حداکثر ۵ مگابایت پذیرفته می‌شوند.
+8. **امنیت فیش واریزی:** فیش‌ها در پوشه خصوصی `private-uploads/receipts/` نگهداری شده و فقط با بایت‌های جادویی معتبر (JPEG, PNG, WebP) و حداکثر ۵ مگابایت پذیرفته می‌شوند. هدر پاسخ استریم فیش‌ها `Cache-Control: private, no-store` است.
 
 ---
 
@@ -126,7 +126,7 @@
 - **پاسخ موفق (200 OK):**
 ```json
 {
-  "data": [
+  "items": [
     {
       "id": 1,
       "orderNumber": "SE-9K3P2M8X",
@@ -140,12 +140,9 @@
       "createdAt": "2026-11-08T08:00:00.000Z"
     }
   ],
-  "meta": {
-    "total": 1,
-    "page": 1,
-    "limit": 10,
-    "totalPages": 1
-  }
+  "total": 1,
+  "page": 1,
+  "limit": 10
 }
 ```
 
@@ -197,12 +194,13 @@
 - **پاسخ موفق (200 OK):**
 ```json
 {
-  "data": [
+  "items": [
     {
       "id": 1,
       "orderNumber": "SE-9K3P2M8X",
       "status": "PENDING",
       "paymentStatus": "WAITING_REVIEW",
+      "hasReceipt": true,
       "adminNote": "یادداشت داخلی",
       "user": {
         "id": 100,
@@ -212,14 +210,12 @@
       "items": [ ... ]
     }
   ],
-  "meta": {
-    "total": 1,
-    "page": 1,
-    "limit": 10,
-    "totalPages": 1
-  }
+  "total": 1,
+  "page": 1,
+  "limit": 10
 }
 ```
+*توجه: فیلد `hasReceipt: boolean` نشان‌دهنده وجود یا عدم وجود فیش واریزی است و مسیر فیزیکی `receiptUrl` در لیست سفارشات افشا نمی‌شود.*
 
 ---
 

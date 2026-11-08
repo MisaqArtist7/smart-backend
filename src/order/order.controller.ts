@@ -89,7 +89,7 @@ export class OrderController {
     const { stream, mimeType } =
       await this.orderService.getReceiptStreamForUser(id, user.id);
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Cache-Control', 'private, no-cache');
+    res.setHeader('Cache-Control', 'private, no-store');
     stream.pipe(res);
   }
 }

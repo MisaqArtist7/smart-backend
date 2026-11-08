@@ -7,6 +7,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateProductDto } from './dto/createProduct.tdo.js';
 import { UpdateProductDto } from './dto/createUpdate.tdo.js';
+import {
+  ProductSort,
+  type QueryProductDto,
+} from './dto/query-product.dto.js';
 
 const productInclude = {
   images: { orderBy: { sortOrder: 'asc' as const } },
@@ -30,10 +34,88 @@ export class ProductService {
     });
   }
 
+  async getPublicProducts(query?: QueryProductDto) {
+    const isPaginated =
+      query &&
+      (query.page !== undefined ||
+        query.limit !== undefined ||
+        query.categoryId !== undefined ||
+        Boolean(query.search?.trim()) ||
+        query.sort !== undefined);
+
+    if (!isPaginated) {
+      return this.getAllProducts(false);
+    }
+
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      isActive: true,
+      category: { isActive: true },
+    };
+
+    if (query.categoryId !== undefined) {
+      where.categoryId = query.categoryId;
+    }
+
+    if (query.search?.trim()) {
+      where.title = {
+        contains: query.search.trim(),
+        mode: 'insensitive',
+      };
+    }
+
+    let orderBy: any = { createdAt: 'desc' };
+    if (query.sort === ProductSort.PRICE_ASC) {
+      orderBy = { price: 'asc' };
+    } else if (query.sort === ProductSort.PRICE_DESC) {
+      orderBy = { price: 'desc' };
+    } else if (query.sort === ProductSort.NEWEST) {
+      orderBy = { createdAt: 'desc' };
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.product.findMany({
+        where,
+        include: productInclude,
+        orderBy,
+        skip,
+        take: limit,
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+    };
+  }
+
   async getProduct(id: number, includeInactive = false) {
     const product = await this.prisma.product.findFirst({
       where: {
         id,
+        ...(includeInactive
+          ? {}
+          : {
+              isActive: true,
+              category: { isActive: true },
+            }),
+      },
+      include: productInclude,
+    });
+    if (!product) throw new NotFoundException('Product not found');
+    return product;
+  }
+
+  async getProductBySlug(slug: string, includeInactive = false) {
+    const product = await this.prisma.product.findFirst({
+      where: {
+        slug,
         ...(includeInactive
           ? {}
           : {

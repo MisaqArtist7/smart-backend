@@ -47,16 +47,80 @@ describe('Order Module (e2e)', () => {
       findUnique: async ({ where }: any) => {
         return categories.find((c) => c.id === where.id) || null;
       },
+      findFirst: async ({ where }: any) => {
+        return (
+          categories.find((c) => {
+            if (where.slug && c.slug !== where.slug) return false;
+            if (where.id && c.id !== where.id) return false;
+            if (where.isActive !== undefined && c.isActive !== where.isActive)
+              return false;
+            return true;
+          }) || null
+        );
+      },
     },
     product: {
-      findMany: async ({ where }: any) => {
-        const ids = where?.id?.in || [];
-        return products
-          .filter((p) => ids.includes(p.id))
-          .map((p) => ({
-            ...p,
-            category: categories.find((c) => c.id === p.categoryId),
-          }));
+      count: async ({ where }: any) => {
+        return products.filter((p) => {
+          if (where?.isActive !== undefined && p.isActive !== where.isActive)
+            return false;
+          if (where?.categoryId && p.categoryId !== where.categoryId)
+            return false;
+          return true;
+        }).length;
+      },
+      findFirst: async ({ where }: any) => {
+        return (
+          products
+            .map((p) => ({
+              ...p,
+              category: categories.find((c) => c.id === p.categoryId),
+            }))
+            .find((p) => {
+              if (where.slug && p.slug !== where.slug) return false;
+              if (where.id && p.id !== where.id) return false;
+              if (where.isActive !== undefined && p.isActive !== where.isActive)
+                return false;
+              if (
+                where.category?.isActive !== undefined &&
+                p.category?.isActive !== where.category.isActive
+              )
+                return false;
+              return true;
+            }) || null
+        );
+      },
+      findMany: async ({ where, skip, take }: any) => {
+        const ids = where?.id?.in;
+        let list = products.map((p) => ({
+          ...p,
+          category: categories.find((c) => c.id === p.categoryId),
+        }));
+        if (ids) {
+          list = list.filter((p) => ids.includes(p.id));
+        }
+        if (where?.isActive !== undefined) {
+          list = list.filter((p) => p.isActive === where.isActive);
+        }
+        if (where?.category?.isActive !== undefined) {
+          list = list.filter(
+            (p) => p.category?.isActive === where.category.isActive,
+          );
+        }
+        if (where?.categoryId) {
+          list = list.filter((p) => p.categoryId === where.categoryId);
+        }
+        if (where?.title?.contains) {
+          list = list.filter((p) =>
+            p.title
+              .toLowerCase()
+              .includes(where.title.contains.toLowerCase()),
+          );
+        }
+        if (skip !== undefined || take !== undefined) {
+          list = list.slice(skip || 0, (skip || 0) + (take || 10));
+        }
+        return list;
       },
       findUnique: async ({ where }: any) => {
         return products.find((p) => p.id === where.id) || null;
@@ -214,14 +278,15 @@ describe('Order Module (e2e)', () => {
     ];
 
     categories = [
-      { id: 1, name: 'کلید و پریز', isActive: true },
-      { id: 2, name: 'سیم و کابل غیرفعال', isActive: false },
+      { id: 1, name: 'کلید و پریز', slug: 'switches', isActive: true },
+      { id: 2, name: 'سیم و کابل غیرفعال', slug: 'wires-inactive', isActive: false },
     ];
 
     products = [
       {
         id: 1,
         title: 'کلید دوپل لوکس',
+        slug: 'lux-switch',
         price: 200000,
         discountPrice: 150000,
         stock: 10,
@@ -231,6 +296,7 @@ describe('Order Module (e2e)', () => {
       {
         id: 2,
         title: 'کالای تک واحدی',
+        slug: 'single-unit',
         price: 300000,
         discountPrice: null,
         stock: 1, // فقط ۱ عدد در انبار موجود است (برای تست رقابت همزمان)
@@ -240,6 +306,7 @@ describe('Order Module (e2e)', () => {
       {
         id: 3,
         title: 'کالای غیرفعال',
+        slug: 'inactive-item',
         price: 50000,
         discountPrice: null,
         stock: 5,
@@ -249,6 +316,7 @@ describe('Order Module (e2e)', () => {
       {
         id: 4,
         title: 'کالای دسته‌بندی غیرفعال',
+        slug: 'cat-inactive-item',
         price: 90000,
         discountPrice: null,
         stock: 5,
@@ -542,5 +610,105 @@ describe('Order Module (e2e)', () => {
       .set('Cookie', [`accessToken=${buyer1Token}`]);
     expect(cancelRes2.status).toBe(409);
     expect(products.find((p) => p.id === 1).stock).toBe(initialStock); // هنوز برابر ۱۰ است و ۱۲ نشده است
+  });
+
+  it('۹. لیست سفارش‌های خریدار (GET /orders/my) با ساختار { items, total, page, limit } بدون افشای adminNote', async () => {
+    // ثبت یک سفارش توسط خریدار ۱
+    await request(app.getHttpServer())
+      .post('/orders')
+      .set('Cookie', [`accessToken=${buyer1Token}`])
+      .send({
+        addressId: 1,
+        paymentMethod: 'CARD_TO_CARD',
+        items: [{ productId: 1, quantity: 1 }],
+      });
+
+    const res = await request(app.getHttpServer())
+      .get('/orders/my?page=1&limit=10')
+      .set('Cookie', [`accessToken=${buyer1Token}`]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('items');
+    expect(res.body).toHaveProperty('total');
+    expect(res.body).toHaveProperty('page', 1);
+    expect(res.body).toHaveProperty('limit', 10);
+    expect(Array.isArray(res.body.items)).toBe(true);
+    expect(res.body.items.length).toBeGreaterThanOrEqual(1);
+
+    // اقلام باید موجود باشند و adminNote تحت هیچ شرایطی نباید افشا شود
+    expect(res.body.items[0]).toHaveProperty('items');
+    expect(res.body.items[0]).not.toHaveProperty('adminNote');
+  });
+
+  it('۱۰. لیست سفارش‌های ادمین (GET /admin/orders) با ساختار { items, total, page, limit } و فیلد hasReceipt بدون افشای مسیر فیش', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/admin/orders?page=1&limit=10')
+      .set('Cookie', [`accessToken=${adminToken}`]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('items');
+    expect(res.body).toHaveProperty('total');
+    expect(res.body).toHaveProperty('page', 1);
+    expect(res.body).toHaveProperty('limit', 10);
+    expect(Array.isArray(res.body.items)).toBe(true);
+
+    if (res.body.items.length > 0) {
+      const order = res.body.items[0];
+      expect(order).toHaveProperty('hasReceipt');
+      expect(typeof order.hasReceipt).toBe('boolean');
+      expect(order).not.toHaveProperty('receiptUrl'); // نباید آدرس فیزیکی فیش افشا شود
+      expect(order).toHaveProperty('user');
+      expect(order.user).toHaveProperty('name');
+      expect(order.user).toHaveProperty('phone');
+    }
+  });
+
+  it('۱۱. هلپرهای سئو کاتالوگ عمومی (Phase 8: Public SEO endpoints)', async () => {
+    // ۱. دریافت محصول فعال بر اساس اسلاگ -> ۲۰۰
+    const activeProd = await request(app.getHttpServer()).get(
+      '/product/slug/lux-switch',
+    );
+    expect(activeProd.status).toBe(200);
+    expect(activeProd.body.slug).toBe('lux-switch');
+
+    // ۲. دریافت محصول غیرفعال یا دسته غیرفعال بر اساس اسلاگ -> ۴۰۴
+    const inactiveProd = await request(app.getHttpServer()).get(
+      '/product/slug/inactive-item',
+    );
+    expect(inactiveProd.status).toBe(404);
+
+    const catInactiveProd = await request(app.getHttpServer()).get(
+      '/product/slug/cat-inactive-item',
+    );
+    expect(catInactiveProd.status).toBe(404);
+
+    // ۳. دریافت دسته فعال بر اساس اسلاگ -> ۲۰۰
+    const activeCat = await request(app.getHttpServer()).get(
+      '/categories/slug/switches',
+    );
+    expect(activeCat.status).toBe(200);
+    expect(activeCat.body.slug).toBe('switches');
+
+    // ۴. دریافت دسته غیرفعال بر اساس اسلاگ -> ۴۰۴
+    const inactiveCat = await request(app.getHttpServer()).get(
+      '/categories/slug/wires-inactive',
+    );
+    expect(inactiveCat.status).toBe(404);
+
+    // ۵. لیست عمومی بدون پارامتر (Flat array) جهت سازگاری به عقب
+    const flatRes = await request(app.getHttpServer()).get('/product');
+    expect(flatRes.status).toBe(200);
+    expect(Array.isArray(flatRes.body)).toBe(true);
+
+    // ۶. لیست عمومی با پارامتر صفحه‌بندی ({ items, total, page, limit })
+    const pagedRes = await request(app.getHttpServer()).get(
+      '/product?page=1&limit=5',
+    );
+    expect(pagedRes.status).toBe(200);
+    expect(pagedRes.body).toHaveProperty('items');
+    expect(pagedRes.body).toHaveProperty('total');
+    expect(pagedRes.body).toHaveProperty('page', 1);
+    expect(pagedRes.body).toHaveProperty('limit', 5);
+    expect(Array.isArray(pagedRes.body.items)).toBe(true);
   });
 });

@@ -13,7 +13,7 @@ export class UpdateOrderStatusDto {
 
   @IsOptional()
   @IsString({ message: 'یادداشت ادمین باید متنی باشد' })
-  @MaxLength(1000, { message: 'حداکثر طول یادداشت ادمین ۱۰۰۰ کاراکتر است' })
+  @MaxLength(500, { message: 'حداکثر طول یادداشت ادمین ۵۰۰ کاراکتر است' })
   adminNote?: string;
 }
 

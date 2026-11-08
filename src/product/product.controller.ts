@@ -7,10 +7,13 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
+  ValidationPipe,
 } from '@nestjs/common';
 import { ProductService } from './product.service.js';
 import { CreateProductDto } from './dto/createProduct.tdo.js';
 import { UpdateProductDto } from './dto/createUpdate.tdo.js';
+import { QueryProductDto } from './dto/query-product.dto.js';
 import { Public } from '../auth/decorators/public.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { Role } from '../generated/prisma/client.js';
@@ -27,9 +30,25 @@ export class ProductController {
 
   @Public()
   @Get()
-  getAllProducts() {
-    // مسیر عمومی فقط محصولات فعال از دسته‌های فعال را برمی‌گرداند
-    return this.productService.getAllProducts(false);
+  getAllProducts(
+    @Query(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    query?: QueryProductDto,
+  ) {
+    // مسیر عمومی محصولات: در صورت عدم ارسال پارامتر لیست تخت، و در صورت ارسال پارامتر صفحه‌بندی برمی‌گرداند
+    return this.productService.getPublicProducts(query);
+  }
+
+  @Public()
+  @Get('slug/:slug')
+  getProductBySlug(@Param('slug') slug: string) {
+    // اگر محصول یا دسته‌اش غیرفعال باشد، خطای 404 صادر می‌شود
+    return this.productService.getProductBySlug(slug, false);
   }
 
   @Public()

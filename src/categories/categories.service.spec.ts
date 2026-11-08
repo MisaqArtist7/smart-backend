@@ -70,4 +70,31 @@ describe('CategoryService Step 6 (Active / Inactive Filtering)', () => {
       }),
     );
   });
+
+  describe('Phase 8: SEO & Catalog Helpers', () => {
+    it('5. جزئیات عمومی دسته بر اساس اسلاگ (findBySlug) اگر دسته غیرفعال باشد باید 404 بدهد', async () => {
+      prisma.category.findFirst.mockResolvedValue(null);
+
+      await expect(service.findBySlug('cat-slug', false)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prisma.category.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            slug: 'cat-slug',
+            isActive: true,
+            OR: [{ parentId: null }, { parent: { isActive: true } }],
+          },
+        }),
+      );
+    });
+
+    it('6. جزئیات عمومی دسته بر اساس اسلاگ (findBySlug) برای دسته فعال باید نتیجه را برگرداند', async () => {
+      const mockCat = { id: 2, name: 'روشنایی', slug: 'lighting', isActive: true };
+      prisma.category.findFirst.mockResolvedValue(mockCat);
+
+      const result = await service.findBySlug('lighting', false);
+      expect(result).toEqual(mockCat);
+    });
+  });
 });

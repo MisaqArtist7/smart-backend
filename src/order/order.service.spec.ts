@@ -314,24 +314,22 @@ describe('OrderService - Order Module Tests', () => {
         take: 10,
       });
 
-      expect(result.data).toEqual(mockOrders);
-      expect(result.meta).toEqual({
-        total: 25,
-        page: 2,
-        limit: 10,
-        totalPages: 3,
-      });
+      expect(result.items).toEqual(mockOrders);
+      expect(result.total).toBe(25);
+      expect(result.page).toBe(2);
+      expect(result.limit).toBe(10);
     });
 
-    it('در صورت خالی بودن لیست باید data خالی و totalPages صفر برگرداند', async () => {
+    it('در صورت خالی بودن لیست باید items خالی و total صفر برگرداند', async () => {
       prisma.order.findMany.mockResolvedValue([]);
       prisma.order.count.mockResolvedValue(0);
 
       const result = await service.getMyOrders(100, { page: 1, limit: 10 });
 
-      expect(result.data).toEqual([]);
-      expect(result.meta.total).toBe(0);
-      expect(result.meta.totalPages).toBe(0);
+      expect(result.items).toEqual([]);
+      expect(result.total).toBe(0);
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(10);
     });
   });
 
@@ -582,8 +580,15 @@ describe('OrderService - Order Module Tests', () => {
             take: 10,
           }),
         );
-        expect(result.data).toEqual(mockOrders);
-        expect(result.meta.total).toBe(1);
+        expect(result.items).toEqual([
+          {
+            ...mockOrders[0],
+            hasReceipt: false,
+          },
+        ]);
+        expect(result.total).toBe(1);
+        expect(result.page).toBe(1);
+        expect(result.limit).toBe(10);
       });
     });
 

@@ -17,3 +17,4 @@ export function generateOrderNumber(): string {
   }
   return `SE-${code}`;
 }
+

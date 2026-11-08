@@ -48,3 +48,4 @@ export class CreateOrderDto {
   @MaxLength(500, { message: 'حداکثر طول یادداشت سفارش ۵۰۰ کاراکتر است' })
   note?: string;
 }
+

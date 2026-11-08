@@ -2,9 +2,12 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseIntPipe,
   Patch,
+  Post,
   Query,
   Res,
   ValidationPipe,
@@ -16,6 +19,7 @@ import { Role } from '../generated/prisma/client.js';
 import { AdminGetOrdersDto } from './dto/admin-get-orders.dto.js';
 import { UpdatePaymentDto } from './dto/update-payment.dto.js';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto.js';
+import { AdminCancelOrderDto } from './dto/admin-cancel-order.dto.js';
 
 @Roles(Role.ADMIN)
 @Controller('admin/orders')
@@ -55,6 +59,15 @@ export class AdminOrderController {
     @Body() dto: UpdateOrderStatusDto,
   ) {
     return this.orderService.updateOrderStatus(id, dto);
+  }
+
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  async cancelOrder(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto?: AdminCancelOrderDto,
+  ) {
+    return this.orderService.cancelOrderByAdmin(id, dto?.adminNote);
   }
 
   @Get(':id/receipt')

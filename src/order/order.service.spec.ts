@@ -33,6 +33,7 @@ describe('OrderService - Order Module Tests', () => {
       product: {
         findMany: vi.fn(),
         updateMany: vi.fn(),
+        update: vi.fn(),
       },
       $transaction: vi.fn(async (cb) => {
         return cb(prisma);
@@ -818,6 +819,175 @@ describe('OrderService - Order Module Tests', () => {
       expect(storage.getReceiptStream).toHaveBeenCalledWith(
         'receipts/test.jpg',
       );
+    });
+  });
+
+  describe('Cancel and Stock Restore (Phase 7)', () => {
+    describe('cancelOrderByCustomer', () => {
+      it('۱. اگر سفارش متعلق به دیگری باشد یا وجود نداشته باشد باید 404 بدهد', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          userId: 999, // کاربر دیگر
+          items: [],
+        });
+
+        await expect(service.cancelOrderByCustomer(1, 100)).rejects.toThrow(
+          NotFoundException,
+        );
+      });
+
+      it('۲. لغو دوباره سفارش لغوشده باید 409 بدهد و موجودی دوباره بازگردانده نشود', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          userId: 100,
+          status: OrderStatus.CANCELLED,
+          items: [{ productId: 10, quantity: 2 }],
+        });
+
+        await expect(service.cancelOrderByCustomer(1, 100)).rejects.toThrow(
+          ConflictException,
+        );
+        expect(prisma.product.update).not.toHaveBeenCalled();
+      });
+
+      it('۳. اگر سفارش PENDING نباشد (مثلاً CONFIRMED) باید 409 بدهد', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          userId: 100,
+          status: OrderStatus.CONFIRMED,
+          paymentStatus: PaymentStatus.WAITING_REVIEW,
+          items: [],
+        });
+
+        await expect(service.cancelOrderByCustomer(1, 100)).rejects.toThrow(
+          ConflictException,
+        );
+      });
+
+      it('۴. اگر سفارش پرداخت شده باشد (PAID) خریدار نمی‌تواند لغو کند و 409 می‌گیرد', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          userId: 100,
+          status: OrderStatus.PENDING,
+          paymentStatus: PaymentStatus.PAID,
+          items: [],
+        });
+
+        await expect(service.cancelOrderByCustomer(1, 100)).rejects.toThrow(
+          ConflictException,
+        );
+      });
+
+      it('۵. لغو موفق خریدار: وضعیت CANCELLED شده، موجودی کالاها افزوده می‌شود و adminNote در خروجی نیست', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          userId: 100,
+          status: OrderStatus.PENDING,
+          paymentStatus: PaymentStatus.PENDING,
+          items: [
+            { productId: 10, quantity: 2 },
+            { productId: 20, quantity: 1 },
+          ],
+        });
+
+        const cancelledOrder = {
+          id: 1,
+          userId: 100,
+          status: OrderStatus.CANCELLED,
+          items: [],
+        };
+        prisma.order.update.mockResolvedValue(cancelledOrder);
+
+        const result = await service.cancelOrderByCustomer(1, 100);
+
+        expect(prisma.product.update).toHaveBeenCalledTimes(2);
+        expect(prisma.product.update).toHaveBeenCalledWith({
+          where: { id: 10 },
+          data: { stock: { increment: 2 } },
+        });
+        expect(prisma.product.update).toHaveBeenCalledWith({
+          where: { id: 20 },
+          data: { stock: { increment: 1 } },
+        });
+
+        expect(prisma.order.update).toHaveBeenCalledWith({
+          where: { id: 1 },
+          data: { status: OrderStatus.CANCELLED },
+          select: customerOrderSelect,
+        });
+
+        expect(result.status).toBe(OrderStatus.CANCELLED);
+        expect(result).not.toHaveProperty('adminNote');
+      });
+    });
+
+    describe('cancelOrderByAdmin', () => {
+      it('۱. لغو دوباره سفارش لغوشده توسط ادمین باید 409 بدهد', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          status: OrderStatus.CANCELLED,
+          items: [],
+        });
+
+        await expect(service.cancelOrderByAdmin(1)).rejects.toThrow(
+          ConflictException,
+        );
+      });
+
+      it('۲. سفارش تحویل‌داده‌شده (DELIVERED) قابل لغو توسط ادمین نیست و 409 می‌دهد', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          status: OrderStatus.DELIVERED,
+          items: [],
+        });
+
+        await expect(service.cancelOrderByAdmin(1)).rejects.toThrow(
+          ConflictException,
+        );
+      });
+
+      it('۳. لغو سفارش پرداخت‌شده توسط ادمین: موجودی بازمی‌گردد و هشدار نیاز به استرداد وجه دستی در adminNote درج می‌شود', async () => {
+        prisma.order.findUnique.mockResolvedValue({
+          id: 1,
+          status: OrderStatus.CONFIRMED,
+          paymentStatus: PaymentStatus.PAID,
+          adminNote: 'یادداشت قبلی',
+          items: [{ productId: 5, quantity: 3 }],
+        });
+
+        const updatedOrder = {
+          id: 1,
+          status: OrderStatus.CANCELLED,
+          adminNote:
+            'یادداشت قبلی\n[سفارش پرداخت‌شده لغو گردید - نیاز به استرداد وجه دستی به مشتری]\nلغو بنا به درخواست تلفنی خریدار',
+          items: [],
+        };
+        prisma.order.update.mockResolvedValue(updatedOrder);
+
+        const result = await service.cancelOrderByAdmin(
+          1,
+          'لغو بنا به درخواست تلفنی خریدار',
+        );
+
+        expect(prisma.product.update).toHaveBeenCalledWith({
+          where: { id: 5 },
+          data: { stock: { increment: 3 } },
+        });
+
+        expect(prisma.order.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 1 },
+            data: expect.objectContaining({
+              status: OrderStatus.CANCELLED,
+              adminNote: expect.stringContaining(
+                '[سفارش پرداخت‌شده لغو گردید - نیاز به استرداد وجه دستی به مشتری]',
+              ),
+            }),
+          }),
+        );
+
+        expect(result.status).toBe(OrderStatus.CANCELLED);
+      });
     });
   });
 });

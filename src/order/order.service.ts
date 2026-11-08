@@ -599,4 +599,131 @@ export class OrderService {
       });
     });
   }
+
+  // TODO: Implement automatic cancellation of unpaid orders using a scheduled job/cron
+  // (e.g. cancel orders remaining in PENDING status after a defined timeout like 24h and restore reserved stock).
+
+  /**
+   * لغو سفارش توسط خریدار (Phase 7)
+   * - فقط مالک سفارش
+   * - فقط زمانی که وضعیت سفارش PENDING و وضعیت پرداخت PAID نباشد
+   * - در یک ترنزکشن اتمیک: وضعیت CANCELLED شده و موجودی تمامی اقلام بازگردانده می‌شود
+   * - لغو مجدد سفارش لغوشده خطای 409 می‌دهد (عدم بازگردانی دوباره موجودی)
+   * - حذف adminNote از خروجی خریدار
+   */
+  async cancelOrderByCustomer(orderId: number, userId: number) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        include: { items: true },
+      });
+
+      if (!order || order.userId !== userId) {
+        throw new NotFoundException('سفارش یافت نشد');
+      }
+
+      if (order.status === OrderStatus.CANCELLED) {
+        throw new ConflictException('این سفارش قبلاً لغو شده است');
+      }
+
+      if (order.status !== OrderStatus.PENDING) {
+        throw new ConflictException(
+          'امکان لغو سفارش فقط برای سفارش‌های در وضعیت در انتظار (PENDING) وجود دارد',
+        );
+      }
+
+      if (order.paymentStatus === PaymentStatus.PAID) {
+        throw new ConflictException(
+          'امکان لغو سفارش پرداخت‌شده توسط خریدار وجود ندارد. لطفاً با پشتیبانی تماس بگیرید',
+        );
+      }
+
+      // بازگردانی قطعی موجودی انبار برای تمامی اقلام سفارش (با مرتب‌سازی شناسه جهت جلوگیری از Deadlock)
+      const sortedItems = [...order.items].sort(
+        (a, b) => a.productId - b.productId,
+      );
+      for (const item of sortedItems) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { increment: item.quantity } },
+        });
+      }
+
+      return tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: OrderStatus.CANCELLED,
+        },
+        select: customerOrderSelect,
+      });
+    });
+  }
+
+  /**
+   * لغو سفارش توسط ادمین (Phase 7)
+   * - لغو هر سفارشی که هنوز DELIVERED یا CANCELLED نشده است
+   * - در یک ترنزکشن اتمیک: وضعیت CANCELLED شده و موجودی اقلام بازگردانده می‌شود
+   * - اگر سفارش PAID بوده باشد، یادداشت دستی استرداد وجه در adminNote درج می‌گردد
+   * - لغو مجدد خطای 409 می‌دهد (Idempotent / No double restore)
+   */
+  async cancelOrderByAdmin(orderId: number, adminNote?: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        include: { items: true },
+      });
+
+      if (!order) {
+        throw new NotFoundException('سفارش یافت نشد');
+      }
+
+      if (order.status === OrderStatus.CANCELLED) {
+        throw new ConflictException('این سفارش قبلاً لغو شده است');
+      }
+
+      if (order.status === OrderStatus.DELIVERED) {
+        throw new ConflictException(
+          'امکان لغو سفارشی که تحویل داده شده است (DELIVERED) وجود ندارد',
+        );
+      }
+
+      // بازگردانی موجودی انبار برای اقلام سفارش
+      const sortedItems = [...order.items].sort(
+        (a, b) => a.productId - b.productId,
+      );
+      for (const item of sortedItems) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { increment: item.quantity } },
+        });
+      }
+
+      // اگر سفارش قبلاً پرداخت شده باشد، یادداشت لزوم عودت وجه دستی به adminNote اضافه می‌شود
+      let noteToSave = order.adminNote || '';
+      if (order.paymentStatus === PaymentStatus.PAID) {
+        const refundNotice =
+          '[سفارش پرداخت‌شده لغو گردید - نیاز به استرداد وجه دستی به مشتری]';
+        noteToSave = noteToSave
+          ? `${noteToSave}\n${refundNotice}`
+          : refundNotice;
+      }
+      if (adminNote?.trim()) {
+        noteToSave = noteToSave
+          ? `${noteToSave}\n${adminNote.trim()}`
+          : adminNote.trim();
+      }
+
+      return tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: OrderStatus.CANCELLED,
+          adminNote: noteToSave || null,
+        },
+        include: {
+          user: { select: { id: true, name: true, phone: true } },
+          items: true,
+        },
+      });
+    });
+  }
 }

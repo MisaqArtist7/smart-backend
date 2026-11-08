@@ -60,7 +60,17 @@ export class OrderController {
     return this.orderService.getMyOrderById(id, user.id);
   }
 
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  async cancelOrder(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    return this.orderService.cancelOrderByCustomer(id, user.id);
+  }
+
   @Post(':id/receipt')
+  @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('receipt'))
   async uploadReceipt(
     @Param('id', ParseIntPipe) id: number,

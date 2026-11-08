@@ -6,3 +6,4 @@ export class AdminCancelOrderDto {
   @MaxLength(1000, { message: 'حداکثر طول یادداشت ادمین ۱۰۰۰ کاراکتر است' })
   adminNote?: string;
 }
+

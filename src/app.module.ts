@@ -9,6 +9,7 @@ import { CategoryModule } from './categories/categories.module.js';
 import { ProductModule } from './product/product.module.js';
 import { SmsModule } from './sms/sms.module.js';
 import { OrderModule } from './order/order.module.js';
+import { AddressModule } from './address/address.module.js';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from './auth/guards/roles.guard.js';
 
@@ -21,6 +22,7 @@ import { RolesGuard } from './auth/guards/roles.guard.js';
     ProductModule,
     SmsModule,
     OrderModule,
+    AddressModule,
   ],
   controllers: [AppController],
   providers: [

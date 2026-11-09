@@ -30,6 +30,8 @@ model User {
   orders          Order[]
   addresses       Address[]
   contactMessages ContactMessage[]
+  comments        Comment[]
+  discountUsages  DiscountUsage[]
 }
 
 model Otp {
@@ -78,10 +80,28 @@ model Category {
   @@index([isActive])
 }
 
+model Brand {
+  id              Int        @id @default(autoincrement())
+  name            String     @db.VarChar(100)
+  slug            String     @unique @db.VarChar(120)
+  logo            String?    @db.VarChar(255)
+  description     String?    @db.Text
+  metaTitle       String?    @db.VarChar(70)
+  metaDescription String?    @db.VarChar(170)
+  isActive        Boolean    @default(true)
+  products        Product[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([isActive])
+}
+
 model Product {
   id              Int            @id @default(autoincrement())
   category        Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   categoryId      Int
+  brand           Brand?         @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  brandId         Int?
   title           String         @db.VarChar(200)
   slug            String         @unique @db.VarChar(220)
   description     String?        @db.Text
@@ -95,10 +115,12 @@ model Product {
   isActive        Boolean        @default(true)
   images          ProductImage[]
   orderItems      OrderItem[]
+  comments        Comment[]
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   @@index([categoryId, isActive])
+  @@index([brandId])
   @@index([isActive])
 }
 
@@ -160,29 +182,35 @@ model Order {
   status        OrderStatus   @default(PENDING)
   paymentMethod PaymentMethod
   paymentStatus PaymentStatus @default(PENDING)
-  receiptUrl    String?       @db.VarChar(255)
-  itemsPrice    Int
-  shippingPrice Int           @default(0)
-  totalPrice    Int
-  receiverName  String        @db.VarChar(100)
-  receiverPhone String        @db.VarChar(15)
-  province      String        @db.VarChar(50)
-  city          String        @db.VarChar(50)
-  addressLine   String        @db.Text
-  postalCode    String        @db.VarChar(10)
-  note          String?       @db.Text
-  trackingCode  String?       @db.VarChar(50)
-  adminNote     String?       @db.Text
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  paidAt        DateTime?
+  receiptUrl     String?        @db.VarChar(255)
+  itemsPrice     Int
+  shippingPrice  Int            @default(0)
+  discountAmount Int            @default(0)
+  totalPrice     Int
+  receiverName   String         @db.VarChar(100)
+  receiverPhone  String         @db.VarChar(15)
+  province       String         @db.VarChar(50)
+  city           String         @db.VarChar(50)
+  addressLine    String         @db.Text
+  postalCode     String         @db.VarChar(10)
+  note           String?        @db.Text
+  trackingCode   String?        @db.VarChar(50)
+  adminNote      String?        @db.Text
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  paidAt         DateTime?
 
-  items         OrderItem[]
+  discountCode   DiscountCode?  @relation(fields: [discountCodeId], references: [id], onDelete: SetNull)
+  discountCodeId Int?
+  discountUsage  DiscountUsage?
+
+  items          OrderItem[]
   
   @@index([userId])
   @@index([status])
   @@index([paymentStatus])
   @@index([createdAt])
+  @@index([discountCodeId])
 }
 
 model OrderItem {
@@ -232,3 +260,76 @@ model ContactMessage {
   @@index([userId])
   @@index([ipHash, createdAt])
 }
+
+enum CommentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Comment {
+  id            Int           @id @default(autoincrement())
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId     Int
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        Int
+  title         String?       @db.VarChar(100)
+  text          String        @db.Text
+  rating        Int           @default(5)
+  status        CommentStatus @default(PENDING)
+  isRecommended Boolean?
+  isBuyer       Boolean       @default(false)
+  adminReply    String?       @db.Text
+  adminReplyAt  DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([productId, status])
+  @@index([userId])
+  @@index([status, createdAt])
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+model DiscountCode {
+  id                Int             @id @default(autoincrement())
+  code              String          @unique @db.VarChar(50)
+  type              DiscountType    @default(PERCENTAGE)
+  value             Int
+  maxDiscountAmount Int?
+  minOrderAmount    Int?            @default(0)
+  usageLimit        Int?
+  usageCount        Int             @default(0)
+  userLimit         Int             @default(1)
+  startDate         DateTime?
+  endDate           DateTime?
+  isActive          Boolean         @default(true)
+  description       String?         @db.VarChar(255)
+  orders            Order[]
+  usages            DiscountUsage[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([code, isActive])
+  @@index([isActive, endDate])
+}
+
+model DiscountUsage {
+  id             Int          @id @default(autoincrement())
+  discountCode   DiscountCode @relation(fields: [discountCodeId], references: [id], onDelete: Cascade)
+  discountCodeId Int
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         Int
+  order          Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId        Int          @unique
+  discountAmount Int
+  createdAt      DateTime     @default(now())
+
+  @@unique([discountCodeId, orderId])
+  @@index([discountCodeId, userId])
+  @@index([userId])
+}
+

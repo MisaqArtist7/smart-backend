@@ -12,6 +12,20 @@ const categoryInclude = {
   parent: { select: { id: true, name: true } },
 };
 
+function normalizeImagePath(img?: string | null): string | null | undefined {
+  if (!img) return img;
+  const trimmed = img.trim();
+  if (!trimmed) return null;
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('/')
+  ) {
+    return trimmed;
+  }
+  return `/${trimmed}`;
+}
+
 @Injectable()
 export class CategoryService {
   constructor(private prisma: PrismaService) {}
@@ -19,7 +33,11 @@ export class CategoryService {
   async create(dto: CreateCategoryDto) {
     await this.assertSlugFree(dto.slug);
     if (dto.parentId != null) await this.assertParentExists(dto.parentId);
-    return this.prisma.category.create({ data: dto, include: categoryInclude });
+    const data = {
+      ...dto,
+      image: dto.image !== undefined ? normalizeImagePath(dto.image) : undefined,
+    };
+    return this.prisma.category.create({ data, include: categoryInclude });
   }
 
   findAll(includeInactive = false) {
@@ -65,7 +83,7 @@ export class CategoryService {
   }
 
   async update(id: number, dto: UpdateCategoryDto) {
-    const category = await this.findOne(id);
+    const category = await this.findOne(id, true);
 
     if (dto.slug && dto.slug !== category.slug) {
       await this.assertSlugFree(dto.slug);
@@ -74,15 +92,20 @@ export class CategoryService {
       await this.assertParentValid(id, dto.parentId);
     }
 
+    const data = {
+      ...dto,
+      image: dto.image !== undefined ? normalizeImagePath(dto.image) : undefined,
+    };
+
     return this.prisma.category.update({
       where: { id },
-      data: dto,
+      data,
       include: categoryInclude,
     });
   }
 
   async remove(id: number) {
-    await this.findOne(id);
+    await this.findOne(id, true);
 
     const [children, products] = await Promise.all([
       this.prisma.category.count({ where: { parentId: id } }),

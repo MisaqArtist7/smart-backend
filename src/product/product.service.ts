@@ -138,7 +138,7 @@ export class ProductService {
   }
 
   async updateProduct(id: number, data: UpdateProductDto) {
-    const product = await this.getProduct(id);
+    const product = await this.getProduct(id, true);
 
     const finalPrice = data.price ?? product.price;
     const finalDiscount =
@@ -165,7 +165,7 @@ export class ProductService {
   }
 
   async deleteProduct(id: number) {
-    await this.getProduct(id);
+    await this.getProduct(id, true);
 
     const ordered = await this.prisma.orderItem.count({
       where: { productId: id },

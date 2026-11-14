@@ -9,3 +9,4 @@ import { AdminBrandController } from './admin-brands.controller.js';
   exports: [BrandService],
 })
 export class BrandModule {}
+

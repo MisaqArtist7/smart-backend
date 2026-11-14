@@ -9,3 +9,4 @@ export class ValidateDiscountDto {
   @Min(0)
   cartAmount: number;
 }
+

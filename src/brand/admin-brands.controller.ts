@@ -44,3 +44,4 @@ export class AdminBrandController {
     return this.brandService.remove(id);
   }
 }
+

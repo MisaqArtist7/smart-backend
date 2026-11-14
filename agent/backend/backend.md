@@ -847,6 +847,86 @@ model DiscountUsage {
 
 ---
 
+### ۱۰. ماژول آپلود امن فایل و رسانه‌ها (`POST /admin/uploads` و سرو استاتیک `/uploads/...`)
+
+این ماژول برای مدیریت آپلود انواع فایل‌های تصویری در پنل ادمین (شامل تصاویر محصولات، بنر دسته‌بندی‌ها و لوگوی برندها) با رعایت استانداردهای امنیتی سطح بالا (Zero Trust) طراحی شده است.
+
+#### اصول امنیتی و فرآیند دو مرحله‌ای (Two-Step Flow):
+۱. **فرایند آپلود و ثبت مستقل هستند:**
+   - کاربر ابتدا فایل تصویر را به اندپوینت `POST /admin/uploads` می‌فرستد.
+   - سرور تصویر را پس از اعتبارسنجی امنیتی روی دیسک ذخیره کرده و پاسخ زیر را برمی‌گرداند:
+     ```json
+     {
+       "path": "products/8c89c8a9-9529-4d6d-88b9-50989b53293e.png"
+     }
+     ```
+   - سپس فرانت‌اند، همین مقدار `path` برگشتی را در فرم ایجاد/ویرایش محصول (`ProductImage.url`)، دسته (`Category.image`) یا برند (`Brand.logo`) قرار داده و درخواست نهایی را به صورت JSON ثبت می‌کند.
+۲. **قانون Zero Trust (هیچ داده‌ای از سمت کلاینت معتبر نیست):**
+   - **نام اصلی فایل دور ریخته می‌شود:** نام اصلی فایل برای جلوگیری از حملات Path Traversal یا تداخل نام‌ها کاملاً نادیده گرفته شده و نام فایل با یک UUID تصادفی (`crypto.randomUUID()`) همراه با پسوند واقعی جایگزین می‌شود.
+   - **بررسی بایت‌های جادویی (Magic Bytes):** هدر `Content-Type` یا پسوند فرستاده‌شده از کلاینت چک نمی‌شود؛ بلکه بایت‌های اولیه بافر بررسی می‌شوند. فقط فرمت‌های PNG (`89 50 4E 47 0D 0A 1A 0A`)، JPEG (`FF D8 FF`) و WebP (`RIFF....WEBP`) مجاز هستند.
+   - **تحریم و ممنوعیت کامل SVG:** فایل‌های وکتور SVG به دلیل ساختار متنی XML و احتمال تزریق کدهای مخرب جاوااسکریپت (حملات XSS)، مطلقاً پذیرفته نمی‌شوند و خطای `400 Bad Request` دریافت خواهند کرد.
+   - **محدودیت حجم (۵ مگابایت):** در صورت ارسال فایلی با حجم بیش از ۵ مگابایت، بدون دریافت کامل استریم در دیسک، عملیات متوقف شده و خطای صریح `413 Payload Too Large` صادر می‌شود.
+   - **جداسازی فولدرها (Whitelist Folders):** فیلد `type` فقط مقادیر `product` (ذخیره در `products/`)، `category` (ذخیره در `categories/`) و `brand` (ذخیره در `brands/`) را می‌پذیرد. هر مقدار دیگر با `400 Bad Request` رد می‌شود.
+
+#### اندپوینت آپلود ادمین:
+- `POST /admin/uploads`
+  - **دسترسی:** فقط ادمین (`@Roles('ADMIN')` + کوکی احراز هویت `accessToken`)
+  - **نوع فرم:** `multipart/form-data`
+  - **فیلدهای فرم (Form Data):**
+    - `file`: فایل باینری تصویر (الزامی، حداکثر ۵ مگابایت، فرمت PNG/JPG/WebP)
+    - `type`: رشته، یکی از سه مقدار دقیق: `"product"` | `"category"` | `"brand"` (الزامی)
+  - **هدرهای درخواست:**
+    - `Content-Type: multipart/form-data`
+    - کوکی `accessToken`
+  - **پاسخ موفق (201 Created):**
+    ```json
+    {
+      "path": "products/2fa85f64-5717-4562-b3fc-2c963f66afa6.png"
+    }
+    ```
+  - **خطاهای احتمالی:**
+    - `400 Bad Request`: عدم ارسال فایل، ارسال فرمت غیرمجاز (فایل متنی تقلبی یا SVG)، یا ارسال `type` نامعتبر/تلاش برای Traversal.
+    - `401 Unauthorized`: عدم ارسال یا منقضی بودن کوکی `accessToken`.
+    - `403 Forbidden`: کاربر جاری نقش `ADMIN` ندارد.
+    - `413 Payload Too Large`: حجم فایل بیش از ۵ مگابایت است.
+
+#### نحوه سرو و نمایش عمومی تصاویر (`/uploads/...`):
+- تصاویر آپلودشده به صورت استاتیک از مسیر روت `/uploads/` در دسترس کلاینت‌ها هستند:
+  - آدرس نمایش تصویر:
+    `GET http://localhost:3000/uploads/products/2fa85f64-5717-4562-b3fc-2c963f66afa6.png`
+  - **هدرهای امنیتی:** سرور هدر امنیتی `X-Content-Type-Options: nosniff` را بر روی تمام فایل‌های استاتیک ست می‌کند و قابلیت Directory Listing غیرفعال است (`index: false`).
+  - **حریم خصوصی فیش‌های واریزی:** پوشه فیش‌های کارت به کارت (`private-uploads/receipts`) کاملاً خصوصی و تفکیک شده است و از روت `/uploads` در دسترس عموم نخواهد بود.
+
+#### راهنمای پیاده‌سازی در کامپوننت‌های فرانت‌اند:
+```typescript
+// نمونه تابع آپلود در فرانت‌اند (React / Next.js)
+async function uploadImage(file: File, type: 'product' | 'category' | 'brand'): Promise<string> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('type', type);
+
+  const response = await fetch('/api/admin/uploads', {
+    method: 'POST',
+    body: formData,
+    credentials: 'include', // ارسال کوکی accessToken
+  });
+
+  if (response.status === 413) {
+    throw new Error('حجم تصویر نباید بیشتر از ۵ مگابایت باشد');
+  }
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'خطا در آپلود تصویر');
+  }
+
+  const data = await response.json();
+  return data.path; // مثلا: "products/uuid.png"
+}
+```
+
+---
+
 ## ۳. دستورالعمل و چک‌لیست طلایی هوش مصنوعی فرانت‌اند
 
 1. **انتقال دقیق به فرانت‌اند:** این فایل را در مسیر دلخواه پروژه فرانت قرار دهید تا هوش مصنوعی بر اساس روت‌ها و تایپ‌های بالا کامپوننت‌ها را ایجاد کند.

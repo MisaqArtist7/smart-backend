@@ -82,3 +82,8 @@ Thumbs.db
 # Uploaded private storage
 /storage
 /private-uploads
+
+# Uploaded public storage
+/public-uploads
+/uploads
+

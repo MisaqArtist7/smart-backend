@@ -1,4 +1,6 @@
+import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsInt,
   IsObject,
@@ -8,7 +10,22 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+
+export class CreateProductImageDto {
+  @IsString()
+  url: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  alt?: string;
+
+  @IsOptional()
+  @IsInt()
+  sortOrder?: number;
+}
 
 export class CreateProductDto {
   @IsString()
@@ -24,6 +41,10 @@ export class CreateProductDto {
 
   @IsInt()
   categoryId: number;
+
+  @IsOptional()
+  @IsInt()
+  brandId?: number | null;
 
   @IsInt()
   @Min(0)
@@ -65,4 +86,10 @@ export class CreateProductDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateProductImageDto)
+  images?: CreateProductImageDto[];
 }

@@ -134,7 +134,25 @@ export class ProductService {
     await this.assertSlugFree(data.slug);
     await this.assertSkuFree(data.sku);
     await this.assertCategoryExists(data.categoryId);
-    return this.prisma.product.create({ data, include: productInclude });
+
+    const { images, ...productData } = data;
+    return this.prisma.product.create({
+      data: {
+        ...productData,
+        ...(images && images.length > 0
+          ? {
+              images: {
+                create: images.map((img, idx) => ({
+                  url: img.url,
+                  alt: img.alt ?? null,
+                  sortOrder: img.sortOrder ?? idx,
+                })),
+              },
+            }
+          : {}),
+      },
+      include: productInclude,
+    });
   }
 
   async updateProduct(id: number, data: UpdateProductDto) {
@@ -157,10 +175,27 @@ export class ProductService {
       await this.assertCategoryExists(data.categoryId);
     }
 
-    return this.prisma.product.update({
-      where: { id },
-      data,
-      include: productInclude,
+    const { images, ...productData } = data;
+    return this.prisma.$transaction(async (tx) => {
+      if (images !== undefined) {
+        await tx.productImage.deleteMany({ where: { productId: id } });
+        if (images.length > 0) {
+          await tx.productImage.createMany({
+            data: images.map((img, idx) => ({
+              productId: id,
+              url: img.url,
+              alt: img.alt ?? null,
+              sortOrder: img.sortOrder ?? idx,
+            })),
+          });
+        }
+      }
+
+      return tx.product.update({
+        where: { id },
+        data: productData,
+        include: productInclude,
+      });
     });
   }
 

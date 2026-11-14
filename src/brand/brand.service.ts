@@ -19,9 +19,16 @@ export class BrandService {
   }
 
   async findBySlug(slug: string, includeInactive = false) {
+    let cleanSlug = slug;
+    try {
+      cleanSlug = decodeURIComponent(slug).trim().toLowerCase();
+    } catch {
+      cleanSlug = slug.trim().toLowerCase();
+    }
+
     const brand = await this.prisma.brand.findFirst({
       where: {
-        slug,
+        slug: cleanSlug,
         ...(includeInactive ? {} : { isActive: true }),
       },
       include: {

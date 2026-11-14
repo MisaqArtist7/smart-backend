@@ -113,9 +113,16 @@ export class ProductService {
   }
 
   async getProductBySlug(slug: string, includeInactive = false) {
+    let cleanSlug = slug;
+    try {
+      cleanSlug = decodeURIComponent(slug).trim().toLowerCase();
+    } catch {
+      cleanSlug = slug.trim().toLowerCase();
+    }
+
     const product = await this.prisma.product.findFirst({
       where: {
-        slug,
+        slug: cleanSlug,
         ...(includeInactive
           ? {}
           : {

@@ -15,8 +15,8 @@ export class CreateCategoryDto {
   @MaxLength(100)
   name: string;
 
-  @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
-    message: 'Slug must be lowercase English letters, numbers, and hyphens',
+  @Matches(/^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$/u, {
+    message: 'Slug must contain only letters (English or Persian), numbers, and hyphens',
   })
   @MaxLength(120)
   slug: string;

@@ -66,9 +66,16 @@ export class CategoryService {
   }
 
   async findBySlug(slug: string, includeInactive = false) {
+    let cleanSlug = slug;
+    try {
+      cleanSlug = decodeURIComponent(slug).trim().toLowerCase();
+    } catch {
+      cleanSlug = slug.trim().toLowerCase();
+    }
+
     const category = await this.prisma.category.findFirst({
       where: {
-        slug,
+        slug: cleanSlug,
         ...(includeInactive
           ? {}
           : {

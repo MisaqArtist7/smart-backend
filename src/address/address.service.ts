@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -12,9 +13,28 @@ export const addressSelect = {
   title: true,
   receiverName: true,
   receiverPhone: true,
-  province: true,
-  city: true,
-  addressLine: true,
+  secondaryPhone: true,
+  provinceId: true,
+  cityId: true,
+  province: {
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+    },
+  },
+  city: {
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+    },
+  },
+  neighborhood: true,
+  streetAddress: true,
+  plaque: true,
+  unit: true,
+  floor: true,
   postalCode: true,
   isDefault: true,
   createdAt: true,
@@ -25,14 +45,48 @@ export const addressSelect = {
 export class AddressService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * ایجاد آدرس جدید برای خریدار
-   * - حداکثر ۱۰ آدرس برای هر کاربر مجاز است (آدرس ۱۱ ام خطای ۴۰۹ برمی‌گرداند)
-   * - اولین آدرس به صورت خودکار به عنوان پیش‌فرض (isDefault=true) ثبت می‌شود
-   * - بررسی سقف و تصمیم پیش‌فرض در ترنزکشن اتمیک انجام می‌شود
-   * - شناسه کاربر (userId) در پاسخ بازگردانده نمی‌شود
-   */
+  private validatePhonesDifferent(
+    primaryPhone: string,
+    secondaryPhone?: string | null,
+  ) {
+    if (secondaryPhone && secondaryPhone === primaryPhone) {
+      throw new BadRequestException(
+        'شماره تماس دوم نمی‌تواند با شماره تماس اصلی یکسان باشد',
+      );
+    }
+  }
+
+  private async validateProvinceAndCity(provinceId: number, cityId: number) {
+    const [province, city] = await Promise.all([
+      this.prisma.province.findUnique({
+        where: { id: provinceId },
+        select: { id: true, isActive: true },
+      }),
+      this.prisma.city.findUnique({
+        where: { id: cityId },
+        select: { id: true, provinceId: true, isActive: true },
+      }),
+    ]);
+
+    if (!province || !province.isActive) {
+      throw new BadRequestException('استان انتخاب‌شده معتبر یا فعال نیست');
+    }
+
+    if (!city || !city.isActive) {
+      throw new BadRequestException('شهر انتخاب‌شده معتبر یا فعال نیست');
+    }
+
+    if (city.provinceId !== provinceId) {
+      throw new BadRequestException(
+        'شهر انتخاب‌شده متعلق به استان انتخاب‌شده نیست',
+      );
+    }
+  }
+
   async createAddress(userId: number, dto: CreateAddressDto) {
+    this.validatePhonesDifferent(dto.receiverPhone, dto.secondaryPhone);
+    await this.validateProvinceAndCity(dto.provinceId, dto.cityId);
+
     return this.prisma.$transaction(async (tx) => {
       const count = await tx.address.count({
         where: { userId },
@@ -51,11 +105,16 @@ export class AddressService {
           userId,
           title: dto.title.trim(),
           receiverName: dto.receiverName.trim(),
-          receiverPhone: dto.receiverPhone.trim(),
-          province: dto.province.trim(),
-          city: dto.city.trim(),
-          addressLine: dto.addressLine.trim(),
-          postalCode: dto.postalCode ? dto.postalCode.trim() : null,
+          receiverPhone: dto.receiverPhone,
+          secondaryPhone: dto.secondaryPhone ?? null,
+          provinceId: dto.provinceId,
+          cityId: dto.cityId,
+          neighborhood: dto.neighborhood?.trim() || null,
+          streetAddress: dto.streetAddress.trim(),
+          plaque: dto.plaque.trim(),
+          unit: dto.unit?.trim() || null,
+          floor: dto.floor?.trim() || null,
+          postalCode: dto.postalCode ?? null,
           isDefault,
         },
         select: addressSelect,
@@ -63,11 +122,6 @@ export class AddressService {
     });
   }
 
-  /**
-   * دریافت لیست آدرس‌های کاربر جاری
-   * - مرتب‌سازی: ابتدا آدرس پیش‌فرض (isDefault=true)، سپس از جدیدترین به قدیمی‌ترین
-   * - شناسه کاربر (userId) در خروجی حذف شده است
-   */
   async getMyAddresses(userId: number) {
     return this.prisma.address.findMany({
       where: { userId },
@@ -76,10 +130,6 @@ export class AddressService {
     });
   }
 
-  /**
-   * دریافت جزئیات یک آدرس متعلق به خریدار
-   * - آدرس متعلق به کاربر دیگر یا ناموجود خطای ۴۰۴ می‌دهد (نه ۴۰۳)
-   */
   async getMyAddressById(id: number, userId: number) {
     const address = await this.prisma.address.findFirst({
       where: { id, userId },
@@ -93,10 +143,6 @@ export class AddressService {
     return address;
   }
 
-  /**
-   * ویرایش جزئی آدرس خریدار
-   * - فقط مالک آدرس مجاز است؛ در غیر این صورت ۴۰۴ برمی‌گردد
-   */
   async updateAddress(id: number, userId: number, dto: UpdateAddressDto) {
     const existing = await this.prisma.address.findFirst({
       where: { id, userId },
@@ -106,6 +152,19 @@ export class AddressService {
       throw new NotFoundException('Address not found');
     }
 
+    if (dto.provinceId !== undefined || dto.cityId !== undefined) {
+      const targetProvinceId = dto.provinceId ?? existing.provinceId;
+      const targetCityId = dto.cityId ?? existing.cityId;
+      await this.validateProvinceAndCity(targetProvinceId, targetCityId);
+    }
+
+    const finalPrimary = dto.receiverPhone ?? existing.receiverPhone;
+    const finalSecondary =
+      dto.secondaryPhone !== undefined
+        ? dto.secondaryPhone || null
+        : existing.secondaryPhone;
+    this.validatePhonesDifferent(finalPrimary, finalSecondary);
+
     return this.prisma.address.update({
       where: { id },
       data: {
@@ -114,27 +173,34 @@ export class AddressService {
           ? { receiverName: dto.receiverName.trim() }
           : {}),
         ...(dto.receiverPhone !== undefined
-          ? { receiverPhone: dto.receiverPhone.trim() }
+          ? { receiverPhone: dto.receiverPhone }
           : {}),
-        ...(dto.province !== undefined
-          ? { province: dto.province.trim() }
+        ...(dto.secondaryPhone !== undefined
+          ? { secondaryPhone: dto.secondaryPhone || null }
           : {}),
-        ...(dto.city !== undefined ? { city: dto.city.trim() } : {}),
-        ...(dto.addressLine !== undefined
-          ? { addressLine: dto.addressLine.trim() }
+        ...(dto.provinceId !== undefined ? { provinceId: dto.provinceId } : {}),
+        ...(dto.cityId !== undefined ? { cityId: dto.cityId } : {}),
+        ...(dto.neighborhood !== undefined
+          ? { neighborhood: dto.neighborhood ? dto.neighborhood.trim() : null }
+          : {}),
+        ...(dto.streetAddress !== undefined
+          ? { streetAddress: dto.streetAddress.trim() }
+          : {}),
+        ...(dto.plaque !== undefined ? { plaque: dto.plaque.trim() } : {}),
+        ...(dto.unit !== undefined
+          ? { unit: dto.unit ? dto.unit.trim() : null }
+          : {}),
+        ...(dto.floor !== undefined
+          ? { floor: dto.floor ? dto.floor.trim() : null }
           : {}),
         ...(dto.postalCode !== undefined
-          ? { postalCode: dto.postalCode ? dto.postalCode.trim() : null }
+          ? { postalCode: dto.postalCode || null }
           : {}),
       },
       select: addressSelect,
     });
   }
 
-  /**
-   * پیش‌فرض کردن یک آدرس
-   * - در یک ترنزکشن اتمیک: تمام آدرس‌های کاربر isDefault=false شده و این آدرس isDefault=true می‌شود
-   */
   async setDefaultAddress(id: number, userId: number) {
     return this.prisma.$transaction(async (tx) => {
       const address = await tx.address.findFirst({
@@ -158,11 +224,6 @@ export class AddressService {
     });
   }
 
-  /**
-   * حذف آدرس خریدار
-   * - در یک ترنزکشن اتمیک حذف می‌شود
-   * - اگر آدرس حذف‌شده پیش‌فرض بوده باشد، جدیدترین آدرس باقی‌مانده کاربر به عنوان پیش‌فرض جدید انتخاب می‌شود
-   */
   async deleteAddress(id: number, userId: number) {
     return this.prisma.$transaction(async (tx) => {
       const address = await tx.address.findFirst({
@@ -197,4 +258,3 @@ export class AddressService {
     });
   }
 }
-

@@ -20,6 +20,7 @@ import {
   PaymentStatus,
 } from '../generated/prisma/client.js';
 import { generateOrderNumber } from './order.utils.js';
+import { formatFullAddress } from '../address/address.utils.js';
 
 export const customerOrderSelect = {
   id: true,
@@ -34,8 +35,16 @@ export const customerOrderSelect = {
   totalPrice: true,
   receiverName: true,
   receiverPhone: true,
+  secondaryPhone: true,
   province: true,
   city: true,
+  provinceId: true,
+  cityId: true,
+  neighborhood: true,
+  streetAddress: true,
+  plaque: true,
+  unit: true,
+  floor: true,
   addressLine: true,
   postalCode: true,
   note: true,
@@ -98,6 +107,10 @@ export class OrderService {
     // ۲. بررسی آدرس متعلق به همین کاربر
     const address = await this.prisma.address.findFirst({
       where: { id: dto.addressId, userId },
+      include: {
+        province: { select: { id: true, name: true } },
+        city: { select: { id: true, name: true } },
+      },
     });
     if (!address) {
       throw new NotFoundException('آدرس مورد نظر یافت نشد');
@@ -194,6 +207,16 @@ export class OrderService {
         orderNumber = generateOrderNumber();
       }
 
+      const addressLine = formatFullAddress({
+        province: address.province.name,
+        city: address.city.name,
+        neighborhood: address.neighborhood,
+        streetAddress: address.streetAddress,
+        plaque: address.plaque,
+        floor: address.floor,
+        unit: address.unit,
+      });
+
       // ثبت سفارش و اقلام آن با ذخیره اسنپ‌شات کامل آدرس و قیمت‌ها
       return tx.order.create({
         data: {
@@ -207,9 +230,17 @@ export class OrderService {
           totalPrice,
           receiverName: address.receiverName,
           receiverPhone: address.receiverPhone,
-          province: address.province,
-          city: address.city,
-          addressLine: address.addressLine,
+          secondaryPhone: address.secondaryPhone,
+          province: address.province.name,
+          city: address.city.name,
+          provinceId: address.provinceId,
+          cityId: address.cityId,
+          neighborhood: address.neighborhood,
+          streetAddress: address.streetAddress,
+          plaque: address.plaque,
+          unit: address.unit,
+          floor: address.floor,
+          addressLine,
           postalCode: address.postalCode,
           note: dto.note?.trim() || null,
           items: {
@@ -429,6 +460,7 @@ export class OrderService {
       where.OR = [
         { orderNumber: { contains: search, mode: 'insensitive' } },
         { receiverPhone: { contains: search } },
+        { secondaryPhone: { contains: search } },
       ];
     }
 

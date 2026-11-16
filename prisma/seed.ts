@@ -1,7 +1,7 @@
 process.loadEnvFile?.();
 import { PrismaPg } from '@prisma/adapter-pg';
 import { ostan, shahr } from 'iran-cities-json';
-import { PrismaClient, Role } from '../src/generated/prisma/client.js';
+import { PrismaClient, Role } from '../dist/generated/prisma/client.js';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {

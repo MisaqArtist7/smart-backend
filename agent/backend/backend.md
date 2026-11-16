@@ -360,35 +360,92 @@ model ProductImage {
 
 ---
 
-### ۵. ماژول آدرس‌های تحویل مشتری (`Address`)
+### ۵. ماژول استان‌ها، شهرها و آدرس‌های تحویل مشتری (`Province`, `City`, `Address`)
 
 #### اسکیمای Prisma:
 ```prisma
+model Province {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique @db.VarChar(60)
+  slug      String    @unique @db.VarChar(80)
+  isActive  Boolean   @default(true)
+  cities    City[]
+  addresses Address[]
+  orders    Order[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([isActive])
+}
+
+model City {
+  id         Int       @id @default(autoincrement())
+  province   Province  @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  provinceId Int
+  name       String    @db.VarChar(80)
+  slug       String    @db.VarChar(100)
+  isActive   Boolean   @default(true)
+  addresses  Address[]
+  orders     Order[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([provinceId, name])
+  @@unique([provinceId, slug])
+  @@index([provinceId, isActive])
+}
+
 model Address {
-  id            Int      @id @default(autoincrement())
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId        Int
-  title         String   @db.VarChar(50)
-  receiverName  String   @db.VarChar(100)
-  receiverPhone String   @db.VarChar(15)
-  province      String   @db.VarChar(50)
-  city          String   @db.VarChar(50)
-  addressLine   String   @db.Text
-  postalCode    String?  @db.VarChar(10)
-  isDefault     Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         Int
+  title          String   @db.VarChar(50)
+  receiverName   String   @db.VarChar(100)
+  receiverPhone  String   @db.VarChar(11)
+  secondaryPhone String?  @db.VarChar(11)
+  province       Province @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  provinceId     Int
+  city           City     @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  cityId         Int
+  neighborhood   String?  @db.VarChar(80)
+  streetAddress  String   @db.VarChar(300)
+  plaque         String   @db.VarChar(20)
+  unit           String?  @db.VarChar(20)
+  floor          String?  @db.VarChar(20)
+  postalCode     String?  @db.VarChar(10)
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([userId])
+  @@index([provinceId])
+  @@index([cityId])
 }
 ```
+
+#### اندپوینت‌های استان و شهر (`/locations` و `/admin/locations`):
+- `GET /locations/provinces`
+  - **دسترسی:** عمومی (`@Public()`)، دارای هدر `Cache-Control: public, max-age=3600, stale-while-revalidate=86400`
+  - **پاسخ (200 OK):** آرایه‌ای از ۳۱ استان فعال: `[{ "id": 1, "name": "آذربایجان شرقی", "slug": "آذربایجان-شرقی" }, ...]`
+- `GET /locations/provinces/:provinceId/cities`
+  - **دسترسی:** عمومی (`@Public()`)، دارای هدر `Cache-Control: public, max-age=3600, stale-while-revalidate=86400`
+  - **پاسخ (200 OK):** آرایه‌ای از شهرهای فعال استان انتخاب‌شده: `[{ "id": 10, "name": "تهران", "slug": "تهران", "provinceId": 8 }, ...]`. اگر استان غیرفعال یا ناموجود باشد خطای `404` می‌دهد.
+- `GET /admin/locations/provinces`
+  - **دسترسی:** ادمین (`@Roles('ADMIN')`) — لیست تمام استان‌ها (فعال و غیرفعال) به همراه تعداد شهرها (`_count.cities`).
+- `GET /admin/locations/provinces/:provinceId/cities`
+  - **دسترسی:** ادمین (`@Roles('ADMIN')`) — لیست تمام شهرهای یک استان (فعال و غیرفعال).
+- `PATCH /admin/locations/provinces/:id`
+  - **دسترسی:** ادمین (`@Roles('ADMIN')`) — **Body:** `{ "isActive": true | false }`. غیرفعال کردن استان، شهرهای آن را نیز برای مشتریان پنهان می‌کند.
+- `PATCH /admin/locations/cities/:id`
+  - **دسترسی:** ادمین (`@Roles('ADMIN')`) — **Body:** `{ "isActive": true | false }`.
 
 #### اندپوینت‌های خریدار (`/addresses`):
 - کلیه مسیرها با کوکی لاگین مشتری کار می‌کنند و `userId` از توکن استخراج می‌شود.
 - سقف هر کاربر: حداکثر ۱۰ آدرس (ثبت آدرس یازدهم خطای `409 Conflict` می‌دهد).
-- اولین آدرس کاربر خودکار پیش‌فرض می‌شود.
+- اولین آدرس کاربر خودکار پیش‌فرض می‌شود. ارسال `isDefault`, `userId`, `id` در بدنه `POST` یا `PATCH` ممنوع است (`400 Bad Request`).
+- **فیلدهای اختیاری:** در فرانت‌اند برای فیلدهای اختیاری (`secondaryPhone`, `neighborhood`, `floor`, `unit`, `postalCode`) هرگز رشته خالی `""` نفرستید؛ در صورت خالی بودن، کلید را از Payload حذف (omit) کنید.
 - `GET /addresses`
-  - **پاسخ (200 OK):** آرایه‌ای از آدرس‌های کاربر جاری (آدرس پیش‌فرض اول، سپس جدیدترین‌ها). فیلد `userId` در خروجی حذف شده است.
+  - **پاسخ (200 OK):** آرایه‌ای از آدرس‌های کاربر جاری (آدرس پیش‌فرض اول، سپس جدیدترین‌ها) همراه با آبجکت‌های `province: { id, name, slug }` و `city: { id, name, slug }`. فیلد `userId` در خروجی حذف شده است.
 - `POST /addresses`
   - **Body (JSON):**
     ```json
@@ -396,20 +453,30 @@ model Address {
       "title": "منزل",
       "receiverName": "علی محمدی",
       "receiverPhone": "09123456789",
-      "province": "تهران",
-      "city": "تهران",
-      "addressLine": "خیابان لاله زار جنوبی کوچه بوشهری پلاک ۵ واحد ۲",
-      "postalCode": "1234567890" // اختیاری (در صورت ارسال باید دقیقا ۱۰ رقم باشد)
+      "secondaryPhone": "02188776655",
+      "provinceId": 8,
+      "cityId": 105,
+      "neighborhood": "ونک",
+      "streetAddress": "خیابان ملاصدرا، کوچه یاس",
+      "plaque": "۱۲",
+      "floor": "۳",
+      "unit": "۵",
+      "postalCode": "1234567890"
     }
     ```
-  - **اعتبارسنجی‌ها:**
-    - فیلد `postalCode` **کاملاً اختیاری (Optional)** است. در صورت ارسال، باید یک رشته دقیقاً ۱۰ رقمی ارقام انگلیسی (`/^\d{10}$/`) باشد. اگر ارسال نشود یا خالی باشد، با مقدار `null` ذخیره می‌گردد.
-    - شماره گیرنده الزامی با فرمت `/^09\d{9}$/`.
-  - **پاسخ (201 Created):** رکورد آدرس ایجاد شده.
+  - **اعتبارسنجی‌ها و نرمال‌سازی:**
+    - ارقام فارسی/عربی (`۰-۹` / `٠-٩`) و کاراکترهای فاصله، خط تیره (`-`) و پرانتز به صورت خودکار در سرور پاک‌سازی و انگلیسی می‌شوند (فرانت‌اند نیز باید قبل از اعتبارسنجی Zod نرمال‌سازی را انجام دهد).
+    - `receiverPhone` (الزامی): فقط موبایل معتبر ایران با فرمت `/^09\d{9}$/`.
+    - `secondaryPhone` (اختیاری): موبایل یا تلفن ثابت ۱۱ رقمی با کد شهر (`/^(09\d{9}|0[1-8]\d{9})$/`). **نباید** با `receiverPhone` برابر باشد (`400 Bad Request`).
+    - `provinceId` و `cityId` (الزامی): هر دو باید فعال باشند و شهر حتماً متعلق به همان استان باشد (`400 Bad Request`).
+    - `streetAddress` (الزامی، ۵ تا ۳۰۰ کاراکتر) و `plaque` (الزامی، ۱ تا ۲۰ کاراکتر).
+    - `neighborhood` (اختیاری، ۲ تا ۸۰ کاراکتر)، `floor` و `unit` (اختیاری، ۱ تا ۲۰ کاراکتر).
+    - `postalCode` (**اختیاری**): در صورت ارسال، دقیقاً ۱۰ رقم (`/^\d{10}$/`). اگر ارسال نشود، `null` ذخیره می‌شود.
+  - **پاسخ (201 Created):** رکورد آدرس ایجاد شده همراه با `province` و `city`.
 - `GET /addresses/:id`
   - **پاسخ (200 OK):** اطلاعات آدرس. اگر آدرس متعلق به کاربر نباشد، خطای `404 Not Found` بازگردانده می‌شود.
 - `PATCH /addresses/:id`
-  - **Body (JSON):** ویرایش فیلدهای آدرس (کد پستی نیز اختیاری و قابل ویرایش است).
+  - **Body (JSON):** ویرایش جزئی فیلدهای آدرس (تمام قوانین استان/شهر و غیرهمسان بودن دو شماره تماس مجدداً بررسی می‌شوند).
 - `PATCH /addresses/:id/default`
   - **توضیحات:** تبدیل این آدرس به آدرس پیش‌فرض کاربر در یک ترنزکشن اتمیک.
 - `DELETE /addresses/:id`
@@ -455,9 +522,19 @@ model Order {
   discountAmount Int            @default(0)
   totalPrice     Int
   receiverName   String         @db.VarChar(100)
-  receiverPhone  String         @db.VarChar(15)
-  province       String         @db.VarChar(50)
-  city           String         @db.VarChar(50)
+  receiverPhone  String         @db.VarChar(11)
+  secondaryPhone String?        @db.VarChar(11)
+  province       String         @db.VarChar(60)
+  city           String         @db.VarChar(80)
+  provinceRef    Province?      @relation(fields: [provinceId], references: [id], onDelete: SetNull)
+  provinceId     Int?
+  cityRef        City?          @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  cityId         Int?
+  neighborhood   String?        @db.VarChar(80)
+  streetAddress  String?        @db.VarChar(300)
+  plaque         String?        @db.VarChar(20)
+  unit           String?        @db.VarChar(20)
+  floor          String?        @db.VarChar(20)
   addressLine    String         @db.Text
   postalCode     String?        @db.VarChar(10)
   note           String?        @db.Text
@@ -501,6 +578,7 @@ model OrderItem {
 ۳. **امنیت فیش واریزی:** فیش‌ها در پوشه خصوصی خارج از وب ذخیره می‌شوند و فقط از طریق اندپوینت استریم امن با هدر `Cache-Control: private, no-store` سرو می‌شوند.
 ۴. **رزرو موجودی در ثبت و بازگردانی در لغو:** هنگام ایجاد سفارش موجودی کالاها در ترنزکشن کسر می‌شود. در صورت لغو سفارش (توسط مشتری یا ادمین) موجودی کالاها دقیقاً یک بار بازمی‌گردد.
 ۵. **محرمانگی یادداشت ادمین (`adminNote`):** این فیلد هرگز در پاسخ‌های خریدار فرانت‌اند ظاهر نمی‌شود.
+۶. **اسنپ‌شات کامل آدرس در سفارش:** هنگام ثبت سفارش، نام متنی استان (`province`)، نام متنی شهر (`city`)، هر دو شماره تماس (`receiverPhone` و `secondaryPhone`)، فیلدهای ساختاری (`neighborhood`, `streetAddress`, `plaque`, `unit`, `floor`, `postalCode`) و یک رشته فرمت‌شده از نشانی کامل در `addressLine` داخل رکورد سفارش کپی می‌شوند تا ویرایش یا غیرفعال شدن استان/شهر یا آدرس در آینده روی سفارش‌های قبلی تاثیری نگذارد. در پنل ادمین امکان جستجو بر اساس هر دو شماره تماس نیز وجود دارد.
 
 #### اندپوینت‌های خریدار:
 - `GET /payment-info`

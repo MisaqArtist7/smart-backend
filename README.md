@@ -21,6 +21,29 @@
   <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
   [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
+## راهنمای اتصال فرانت‌اند به استان‌ها، شهرها و آدرس‌های ساختاری
+
+1. **اطمینان از وجود دیتای استان و شهر در دیتابیس:**
+   - اگر `GET http://localhost:4000/locations/provinces` خالی است یا خطا می‌دهد، دستورات زیر را در `smart-backend` اجرا کنید:
+     ```bash
+     pnpm exec prisma migrate dev --name add_provinces_cities_and_structured_address
+     pnpm run seed
+     ```
+2. **تنظیمات فرانت‌اند (`.env.local` و CORS):**
+   - در `smart-frontend/.env.local` مقدار `NEXT_PUBLIC_API_URL=http://localhost:4000` باشد.
+   - فرانت‌اند را با آدرس `http://localhost:3000` باز کنید (CORS بک‌ند در `src/main.ts` روی `http://localhost:3000` با `credentials: true` تنظیم شده است).
+3. **اندپوینت‌های استان و شهر (عمومی، بدون نیاز به لاگین):**
+   - لیست ۳۱ استان فعال: `GET /locations/provinces` $\rightarrow$ `[{ id, name, slug }]`
+   - لیست شهرهای فعال یک استان: `GET /locations/provinces/:provinceId/cities` $\rightarrow$ `[{ id, name, slug, provinceId }]`
+   - در فرم فرانت‌اند، با انتخاب/تغییر استان، `cityId` پاک شود و شهرها با `provinceId` جدید فچ شوند (`useProvinces()` و `useCities(provinceId)` در `lib/api/locations.ts`).
+4. **ثبت و ویرایش آدرس (`POST /addresses` و `PATCH /addresses/:id`):**
+   - فیلدهای ارسالی: `title`, `receiverName`, `receiverPhone` (موبایل `09xxxxxxxxx`), `secondaryPhone` (اختیاری: موبایل یا تلفن ثابت ۱۱ رقمی با کد شهر و غیرهمسان با شماره اصلی), `provinceId`, `cityId`, `neighborhood` (اختیاری), `streetAddress`, `plaque`, `floor` (اختیاری), `unit` (اختیاری), `postalCode` (اختیاری، ۱۰ رقمی).
+   - **مهم:** هرگز `isDefault` یا رشته خالی `""` برای فیلدهای اختیاری ارسال نکنید.
+5. **مستندات کامل قرارداد API برای هوش مصنوعی فرانت‌اند:**
+   - فایل [agent/backend/backend.md](./agent/backend/backend.md) را ببینید.
+
+---
+
 ## Description
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.

@@ -15,6 +15,7 @@ import { UploadModule } from './upload/upload.module.js';
 import { BrandModule } from './brand/brand.module.js';
 import { CommentsModule } from './comments/comments.module.js';
 import { DiscountsModule } from './discounts/discounts.module.js';
+import { LocationsModule } from './locations/locations.module.js';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from './auth/guards/roles.guard.js';
 
@@ -33,6 +34,7 @@ import { RolesGuard } from './auth/guards/roles.guard.js';
     BrandModule,
     CommentsModule,
     DiscountsModule,
+    LocationsModule,
   ],
   controllers: [AppController],
   providers: [

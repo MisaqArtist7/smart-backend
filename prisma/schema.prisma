@@ -136,22 +136,62 @@ model ProductImage {
   @@index([productId])
 }
 
+model Province {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique @db.VarChar(60)
+  slug      String    @unique @db.VarChar(80)
+  isActive  Boolean   @default(true)
+  cities    City[]
+  addresses Address[]
+  orders    Order[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([isActive])
+}
+
+model City {
+  id         Int       @id @default(autoincrement())
+  province   Province  @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  provinceId Int
+  name       String    @db.VarChar(80)
+  slug       String    @db.VarChar(100)
+  isActive   Boolean   @default(true)
+  addresses  Address[]
+  orders     Order[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([provinceId, name])
+  @@unique([provinceId, slug])
+  @@index([provinceId, isActive])
+}
+
 model Address {
-  id            Int      @id @default(autoincrement())
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId        Int
-  title         String   @db.VarChar(50)
-  receiverName  String   @db.VarChar(100)
-  receiverPhone String   @db.VarChar(15)
-  province      String   @db.VarChar(50)
-  city          String   @db.VarChar(50)
-  addressLine   String   @db.Text
-  postalCode    String?  @db.VarChar(10)
-  isDefault     Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         Int
+  title          String   @db.VarChar(50)
+  receiverName   String   @db.VarChar(100)
+  receiverPhone  String   @db.VarChar(11)
+  secondaryPhone String?  @db.VarChar(11)
+  province       Province @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  provinceId     Int
+  city           City     @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  cityId         Int
+  neighborhood   String?  @db.VarChar(80)
+  streetAddress  String   @db.VarChar(300)
+  plaque         String   @db.VarChar(20)
+  unit           String?  @db.VarChar(20)
+  floor          String?  @db.VarChar(20)
+  postalCode     String?  @db.VarChar(10)
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([userId])
+  @@index([provinceId])
+  @@index([cityId])
 }
 
 enum OrderStatus {
@@ -175,22 +215,32 @@ enum PaymentStatus {
 }
 
 model Order {
-  id            Int           @id @default(autoincrement())
-  user          User          @relation(fields: [userId], references: [id], onDelete: Restrict)
-  userId        Int
-  orderNumber   String        @unique @db.VarChar(20)
-  status        OrderStatus   @default(PENDING)
-  paymentMethod PaymentMethod
-  paymentStatus PaymentStatus @default(PENDING)
+  id             Int            @id @default(autoincrement())
+  user           User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userId         Int
+  orderNumber    String         @unique @db.VarChar(20)
+  status         OrderStatus    @default(PENDING)
+  paymentMethod  PaymentMethod
+  paymentStatus  PaymentStatus  @default(PENDING)
   receiptUrl     String?        @db.VarChar(255)
   itemsPrice     Int
   shippingPrice  Int            @default(0)
   discountAmount Int            @default(0)
   totalPrice     Int
   receiverName   String         @db.VarChar(100)
-  receiverPhone  String         @db.VarChar(15)
-  province       String         @db.VarChar(50)
-  city           String         @db.VarChar(50)
+  receiverPhone  String         @db.VarChar(11)
+  secondaryPhone String?        @db.VarChar(11)
+  province       String         @db.VarChar(60)
+  city           String         @db.VarChar(80)
+  provinceRef    Province?      @relation(fields: [provinceId], references: [id], onDelete: SetNull)
+  provinceId     Int?
+  cityRef        City?          @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  cityId         Int?
+  neighborhood   String?        @db.VarChar(80)
+  streetAddress  String?        @db.VarChar(300)
+  plaque         String?        @db.VarChar(20)
+  unit           String?        @db.VarChar(20)
+  floor          String?        @db.VarChar(20)
   addressLine    String         @db.Text
   postalCode     String?        @db.VarChar(10)
   note           String?        @db.Text

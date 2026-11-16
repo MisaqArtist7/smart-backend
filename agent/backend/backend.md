@@ -374,7 +374,7 @@ model Address {
   province      String   @db.VarChar(50)
   city          String   @db.VarChar(50)
   addressLine   String   @db.Text
-  postalCode    String   @db.VarChar(10)
+  postalCode    String?  @db.VarChar(10)
   isDefault     Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -399,15 +399,17 @@ model Address {
       "province": "تهران",
       "city": "تهران",
       "addressLine": "خیابان لاله زار جنوبی کوچه بوشهری پلاک ۵ واحد ۲",
-      "postalCode": "1234567890"
+      "postalCode": "1234567890" // اختیاری (در صورت ارسال باید دقیقا ۱۰ رقم باشد)
     }
     ```
-  - **اعتبارسنجی‌ها:** کد پستی دقیقاً ۱۰ رقم، شماره گیرنده با فرمت `/^09\d{9}$/`.
+  - **اعتبارسنجی‌ها:**
+    - فیلد `postalCode` **کاملاً اختیاری (Optional)** است. در صورت ارسال، باید یک رشته دقیقاً ۱۰ رقمی ارقام انگلیسی (`/^\d{10}$/`) باشد. اگر ارسال نشود یا خالی باشد، با مقدار `null` ذخیره می‌گردد.
+    - شماره گیرنده الزامی با فرمت `/^09\d{9}$/`.
   - **پاسخ (201 Created):** رکورد آدرس ایجاد شده.
 - `GET /addresses/:id`
   - **پاسخ (200 OK):** اطلاعات آدرس. اگر آدرس متعلق به کاربر نباشد، خطای `404 Not Found` بازگردانده می‌شود.
 - `PATCH /addresses/:id`
-  - **Body (JSON):** ویرایش فیلدهای آدرس.
+  - **Body (JSON):** ویرایش فیلدهای آدرس (کد پستی نیز اختیاری و قابل ویرایش است).
 - `PATCH /addresses/:id/default`
   - **توضیحات:** تبدیل این آدرس به آدرس پیش‌فرض کاربر در یک ترنزکشن اتمیک.
 - `DELETE /addresses/:id`
@@ -457,7 +459,7 @@ model Order {
   province       String         @db.VarChar(50)
   city           String         @db.VarChar(50)
   addressLine    String         @db.Text
-  postalCode     String         @db.VarChar(10)
+  postalCode     String?        @db.VarChar(10)
   note           String?        @db.Text
   trackingCode   String?        @db.VarChar(50)
   adminNote      String?        @db.Text

@@ -55,7 +55,7 @@ export class AddressService {
           province: dto.province.trim(),
           city: dto.city.trim(),
           addressLine: dto.addressLine.trim(),
-          postalCode: dto.postalCode.trim(),
+          postalCode: dto.postalCode ? dto.postalCode.trim() : null,
           isDefault,
         },
         select: addressSelect,
@@ -124,7 +124,7 @@ export class AddressService {
           ? { addressLine: dto.addressLine.trim() }
           : {}),
         ...(dto.postalCode !== undefined
-          ? { postalCode: dto.postalCode.trim() }
+          ? { postalCode: dto.postalCode ? dto.postalCode.trim() : null }
           : {}),
       },
       select: addressSelect,

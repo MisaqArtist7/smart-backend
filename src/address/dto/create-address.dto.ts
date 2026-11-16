@@ -1,5 +1,11 @@
 import { Transform } from 'class-transformer';
-import { IsNotEmpty, IsString, Length, Matches } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Length,
+  Matches,
+} from 'class-validator';
 
 export class CreateAddressDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
@@ -45,10 +51,16 @@ export class CreateAddressDto {
   })
   addressLine: string;
 
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(({ value }) =>
+    typeof value === 'string'
+      ? value.trim() === ''
+        ? undefined
+        : value.trim()
+      : value,
+  )
+  @IsOptional()
   @IsString({ message: 'Postal code must be a string' })
-  @IsNotEmpty({ message: 'Postal code is required' })
   @Matches(/^\d{10}$/, { message: 'Postal code must be exactly 10 digits' })
-  postalCode: string;
+  postalCode?: string;
 }
 

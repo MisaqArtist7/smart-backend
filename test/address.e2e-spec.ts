@@ -264,6 +264,21 @@ describe('Address Module (e2e)', () => {
         postalCode: '12345', // نامعتبر
       });
     expect(resPostal.status).toBe(400);
+
+    // ثبت آدرس بدون کد پستی (اختیاری) با موفقیت
+    const resNoPostal = await request(app.getHttpServer())
+      .post('/addresses')
+      .set('Cookie', [`accessToken=${user1Token}`])
+      .send({
+        title: 'منزل بدون کدپستی',
+        receiverName: 'علی رضایی',
+        receiverPhone: '09121111111',
+        province: 'تهران',
+        city: 'تهران',
+        addressLine: 'خیابان لاله زار پلاک ۱۰',
+      });
+    expect(resNoPostal.status).toBe(201);
+    expect(resNoPostal.body.postalCode).toBeNull();
   });
 
   it('۶. دریافت لیست آدرس‌ها باید ابتدا آدرس پیش‌فرض و سپس جدیدترین را برگرداند', async () => {

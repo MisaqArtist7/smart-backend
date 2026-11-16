@@ -89,6 +89,33 @@ describe('AddressService', () => {
       );
       expect(prisma.address.create).not.toHaveBeenCalled();
     });
+
+    it('۴. ایجاد آدرس بدون کد پستی (اختیاری) باید مقدار postalCode را null قرار دهد', async () => {
+      prisma.address.count.mockResolvedValue(0);
+      prisma.address.create.mockImplementation(async ({ data }: any) => ({
+        id: 1,
+        ...data,
+      }));
+
+      const dtoWithoutPostal = {
+        title: 'منزل',
+        receiverName: 'علی رضایی',
+        receiverPhone: '09121234567',
+        province: 'تهران',
+        city: 'تهران',
+        addressLine: 'خیابان ولیعصر پلاک ۱۲',
+      };
+
+      const result = await service.createAddress(100, dtoWithoutPostal);
+
+      expect(prisma.address.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          postalCode: null,
+        }),
+        select: addressSelect,
+      });
+      expect(result.postalCode).toBeNull();
+    });
   });
 
   describe('getMyAddresses', () => {

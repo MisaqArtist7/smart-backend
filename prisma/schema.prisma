@@ -146,7 +146,7 @@ model Address {
   province      String   @db.VarChar(50)
   city          String   @db.VarChar(50)
   addressLine   String   @db.Text
-  postalCode    String   @db.VarChar(10)
+  postalCode    String?  @db.VarChar(10)
   isDefault     Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -192,7 +192,7 @@ model Order {
   province       String         @db.VarChar(50)
   city           String         @db.VarChar(50)
   addressLine    String         @db.Text
-  postalCode     String         @db.VarChar(10)
+  postalCode     String?        @db.VarChar(10)
   note           String?        @db.Text
   trackingCode   String?        @db.VarChar(50)
   adminNote      String?        @db.Text

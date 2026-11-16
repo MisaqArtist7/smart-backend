@@ -65,15 +65,6 @@ export class CreateAddressDto {
   @Min(1, { message: 'شناسه شهر نامعتبر است' })
   cityId: number;
 
-  @Transform(({ value }) => trimOptionalText(value))
-  @IsOptional()
-  @IsString({ message: 'نام محله باید متنی باشد' })
-  @Length(2, 80, { message: 'نام محله باید بین ۲ تا ۸۰ کاراکتر باشد' })
-  @Matches(NO_CONTROL_CHARS_REGEX, {
-    message: 'نام محله شامل کاراکترهای غیرمجاز است',
-  })
-  neighborhood?: string;
-
   @Transform(({ value }) => trimRequiredText(value))
   @IsString({ message: 'نشانی خیابان باید متنی باشد' })
   @IsNotEmpty({ message: 'نشانی خیابان و کوچه الزامی است' })

@@ -30,7 +30,6 @@ export const addressSelect = {
       slug: true,
     },
   },
-  neighborhood: true,
   streetAddress: true,
   plaque: true,
   unit: true,
@@ -109,7 +108,6 @@ export class AddressService {
           secondaryPhone: dto.secondaryPhone ?? null,
           provinceId: dto.provinceId,
           cityId: dto.cityId,
-          neighborhood: dto.neighborhood?.trim() || null,
           streetAddress: dto.streetAddress.trim(),
           plaque: dto.plaque.trim(),
           unit: dto.unit?.trim() || null,
@@ -180,9 +178,6 @@ export class AddressService {
           : {}),
         ...(dto.provinceId !== undefined ? { provinceId: dto.provinceId } : {}),
         ...(dto.cityId !== undefined ? { cityId: dto.cityId } : {}),
-        ...(dto.neighborhood !== undefined
-          ? { neighborhood: dto.neighborhood ? dto.neighborhood.trim() : null }
-          : {}),
         ...(dto.streetAddress !== undefined
           ? { streetAddress: dto.streetAddress.trim() }
           : {}),

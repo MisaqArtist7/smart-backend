@@ -41,7 +41,6 @@ export function trimOptionalText(value: unknown): unknown {
 export interface FullAddressParts {
   province: string;
   city: string;
-  neighborhood?: string | null;
   streetAddress: string;
   plaque: string;
   floor?: string | null;
@@ -52,7 +51,6 @@ export function formatFullAddress(parts: FullAddressParts): string {
   const segments = [
     parts.province,
     parts.city,
-    parts.neighborhood ? `محله ${parts.neighborhood}` : null,
     parts.streetAddress,
     `پلاک ${parts.plaque}`,
     parts.floor ? `طبقه ${parts.floor}` : null,

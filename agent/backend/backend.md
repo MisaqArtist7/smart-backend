@@ -407,7 +407,6 @@ model Address {
   provinceId     Int
   city           City     @relation(fields: [cityId], references: [id], onDelete: Restrict)
   cityId         Int
-  neighborhood   String?  @db.VarChar(80)
   streetAddress  String   @db.VarChar(300)
   plaque         String   @db.VarChar(20)
   unit           String?  @db.VarChar(20)
@@ -443,7 +442,7 @@ model Address {
 - کلیه مسیرها با کوکی لاگین مشتری کار می‌کنند و `userId` از توکن استخراج می‌شود.
 - سقف هر کاربر: حداکثر ۱۰ آدرس (ثبت آدرس یازدهم خطای `409 Conflict` می‌دهد).
 - اولین آدرس کاربر خودکار پیش‌فرض می‌شود. ارسال `isDefault`, `userId`, `id` در بدنه `POST` یا `PATCH` ممنوع است (`400 Bad Request`).
-- **فیلدهای اختیاری:** در فرانت‌اند برای فیلدهای اختیاری (`secondaryPhone`, `neighborhood`, `floor`, `unit`, `postalCode`) هرگز رشته خالی `""` نفرستید؛ در صورت خالی بودن، کلید را از Payload حذف (omit) کنید.
+- **فیلدهای اختیاری:** در فرانت‌اند برای فیلدهای اختیاری (`secondaryPhone`, `floor`, `unit`, `postalCode`) هرگز رشته خالی `""` نفرستید؛ در صورت خالی بودن، کلید را از Payload حذف (omit) کنید.
 - `GET /addresses`
   - **پاسخ (200 OK):** آرایه‌ای از آدرس‌های کاربر جاری (آدرس پیش‌فرض اول، سپس جدیدترین‌ها) همراه با آبجکت‌های `province: { id, name, slug }` و `city: { id, name, slug }`. فیلد `userId` در خروجی حذف شده است.
 - `POST /addresses`
@@ -456,7 +455,6 @@ model Address {
       "secondaryPhone": "02188776655",
       "provinceId": 8,
       "cityId": 105,
-      "neighborhood": "ونک",
       "streetAddress": "خیابان ملاصدرا، کوچه یاس",
       "plaque": "۱۲",
       "floor": "۳",
@@ -470,7 +468,7 @@ model Address {
     - `secondaryPhone` (اختیاری): موبایل یا تلفن ثابت ۱۱ رقمی با کد شهر (`/^(09\d{9}|0[1-8]\d{9})$/`). **نباید** با `receiverPhone` برابر باشد (`400 Bad Request`).
     - `provinceId` و `cityId` (الزامی): هر دو باید فعال باشند و شهر حتماً متعلق به همان استان باشد (`400 Bad Request`).
     - `streetAddress` (الزامی، ۵ تا ۳۰۰ کاراکتر) و `plaque` (الزامی، ۱ تا ۲۰ کاراکتر).
-    - `neighborhood` (اختیاری، ۲ تا ۸۰ کاراکتر)، `floor` و `unit` (اختیاری، ۱ تا ۲۰ کاراکتر).
+    - `floor` و `unit` (اختیاری، ۱ تا ۲۰ کاراکتر).
     - `postalCode` (**اختیاری**): در صورت ارسال، دقیقاً ۱۰ رقم (`/^\d{10}$/`). اگر ارسال نشود، `null` ذخیره می‌شود.
   - **پاسخ (201 Created):** رکورد آدرس ایجاد شده همراه با `province` و `city`.
 - `GET /addresses/:id`
@@ -530,7 +528,6 @@ model Order {
   provinceId     Int?
   cityRef        City?          @relation(fields: [cityId], references: [id], onDelete: SetNull)
   cityId         Int?
-  neighborhood   String?        @db.VarChar(80)
   streetAddress  String?        @db.VarChar(300)
   plaque         String?        @db.VarChar(20)
   unit           String?        @db.VarChar(20)
@@ -578,7 +575,7 @@ model OrderItem {
 ۳. **امنیت فیش واریزی:** فیش‌ها در پوشه خصوصی خارج از وب ذخیره می‌شوند و فقط از طریق اندپوینت استریم امن با هدر `Cache-Control: private, no-store` سرو می‌شوند.
 ۴. **رزرو موجودی در ثبت و بازگردانی در لغو:** هنگام ایجاد سفارش موجودی کالاها در ترنزکشن کسر می‌شود. در صورت لغو سفارش (توسط مشتری یا ادمین) موجودی کالاها دقیقاً یک بار بازمی‌گردد.
 ۵. **محرمانگی یادداشت ادمین (`adminNote`):** این فیلد هرگز در پاسخ‌های خریدار فرانت‌اند ظاهر نمی‌شود.
-۶. **اسنپ‌شات کامل آدرس در سفارش:** هنگام ثبت سفارش، نام متنی استان (`province`)، نام متنی شهر (`city`)، هر دو شماره تماس (`receiverPhone` و `secondaryPhone`)، فیلدهای ساختاری (`neighborhood`, `streetAddress`, `plaque`, `unit`, `floor`, `postalCode`) و یک رشته فرمت‌شده از نشانی کامل در `addressLine` داخل رکورد سفارش کپی می‌شوند تا ویرایش یا غیرفعال شدن استان/شهر یا آدرس در آینده روی سفارش‌های قبلی تاثیری نگذارد. در پنل ادمین امکان جستجو بر اساس هر دو شماره تماس نیز وجود دارد.
+۶. **اسنپ‌شات کامل آدرس در سفارش:** هنگام ثبت سفارش، نام متنی استان (`province`)، نام متنی شهر (`city`)، هر دو شماره تماس (`receiverPhone` و `secondaryPhone`)، فیلدهای ساختاری (`streetAddress`, `plaque`, `unit`, `floor`, `postalCode`) و یک رشته فرمت‌شده از نشانی کامل در `addressLine` داخل رکورد سفارش کپی می‌شوند تا ویرایش یا غیرفعال شدن استان/شهر یا آدرس در آینده روی سفارش‌های قبلی تاثیری نگذارد. در پنل ادمین امکان جستجو بر اساس هر دو شماره تماس نیز وجود دارد.
 
 #### اندپوینت‌های خریدار:
 - `GET /payment-info`

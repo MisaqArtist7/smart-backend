@@ -40,7 +40,6 @@ export const customerOrderSelect = {
   city: true,
   provinceId: true,
   cityId: true,
-  neighborhood: true,
   streetAddress: true,
   plaque: true,
   unit: true,
@@ -210,7 +209,6 @@ export class OrderService {
       const addressLine = formatFullAddress({
         province: address.province.name,
         city: address.city.name,
-        neighborhood: address.neighborhood,
         streetAddress: address.streetAddress,
         plaque: address.plaque,
         floor: address.floor,
@@ -235,7 +233,6 @@ export class OrderService {
           city: address.city.name,
           provinceId: address.provinceId,
           cityId: address.cityId,
-          neighborhood: address.neighborhood,
           streetAddress: address.streetAddress,
           plaque: address.plaque,
           unit: address.unit,

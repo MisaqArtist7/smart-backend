@@ -37,7 +37,7 @@
    - لیست شهرهای فعال یک استان: `GET /locations/provinces/:provinceId/cities` $\rightarrow$ `[{ id, name, slug, provinceId }]`
    - در فرم فرانت‌اند، با انتخاب/تغییر استان، `cityId` پاک شود و شهرها با `provinceId` جدید فچ شوند (`useProvinces()` و `useCities(provinceId)` در `lib/api/locations.ts`).
 4. **ثبت و ویرایش آدرس (`POST /addresses` و `PATCH /addresses/:id`):**
-   - فیلدهای ارسالی: `title`, `receiverName`, `receiverPhone` (موبایل `09xxxxxxxxx`), `secondaryPhone` (اختیاری: موبایل یا تلفن ثابت ۱۱ رقمی با کد شهر و غیرهمسان با شماره اصلی), `provinceId`, `cityId`, `neighborhood` (اختیاری), `streetAddress`, `plaque`, `floor` (اختیاری), `unit` (اختیاری), `postalCode` (اختیاری، ۱۰ رقمی).
+   - فیلدهای ارسالی: `title`, `receiverName`, `receiverPhone` (موبایل `09xxxxxxxxx`), `secondaryPhone` (اختیاری: موبایل یا تلفن ثابت ۱۱ رقمی با کد شهر و غیرهمسان با شماره اصلی), `provinceId`, `cityId`, `streetAddress`, `plaque`, `floor` (اختیاری), `unit` (اختیاری), `postalCode` (اختیاری، ۱۰ رقمی).
    - **مهم:** هرگز `isDefault` یا رشته خالی `""` برای فیلدهای اختیاری ارسال نکنید.
 5. **مستندات کامل قرارداد API برای هوش مصنوعی فرانت‌اند:**
    - فایل [agent/backend/backend.md](./agent/backend/backend.md) را ببینید.

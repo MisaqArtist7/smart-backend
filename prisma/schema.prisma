@@ -179,7 +179,6 @@ model Address {
   provinceId     Int
   city           City     @relation(fields: [cityId], references: [id], onDelete: Restrict)
   cityId         Int
-  neighborhood   String?  @db.VarChar(80)
   streetAddress  String   @db.VarChar(300)
   plaque         String   @db.VarChar(20)
   unit           String?  @db.VarChar(20)
@@ -236,7 +235,6 @@ model Order {
   provinceId     Int?
   cityRef        City?          @relation(fields: [cityId], references: [id], onDelete: SetNull)
   cityId         Int?
-  neighborhood   String?        @db.VarChar(80)
   streetAddress  String?        @db.VarChar(300)
   plaque         String?        @db.VarChar(20)
   unit           String?        @db.VarChar(20)

@@ -1,7 +1,11 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { types } from 'pg';
 import { PrismaClient } from '../generated/prisma/client.js';
+
+// Parse PostgreSQL `timestamp without time zone` (OID 1114) as UTC
+types.setTypeParser(1114, (str: string) => new Date(`${str}Z`));
 
 @Injectable()
 export class PrismaService

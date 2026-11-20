@@ -1022,13 +1022,26 @@ async function uploadImage(file: File, type: 'product' | 'category' | 'brand'): 
      `GET http://localhost:4000/locations/provinces`
    - اگر آرایه خالی `[]` یا خطای 500 برمی‌گرداند، دستور `pnpm run seed` را در بک‌ند اجرا کنید.
 2. **آدرس بک‌ند و CORS:**
-   - در `.env.local` فرانت‌اند حتماً `NEXT_PUBLIC_API_URL=http://localhost:4000` تنظیم باشد و سرور Next.js بعد از تغییر `.env.local` ری‌استارت شود.
-   - بک‌ند CORS را فقط روی `http://localhost:3000` باز گذاشته است؛ بنابراین فرانت‌اند را با `http://localhost:3000` باز کنید (نه `127.0.0.1:3000`).
+   - در `.env.local` (توسعه) مقدار `NEXT_PUBLIC_API_URL=http://localhost:4000` تنظیم باشد و سرور Next.js بعد از تغییر `.env.local` ری‌استارت شود.
+   - بک‌ند دامنه‌های مجاز CORS را از متغیر `CORS_ORIGIN` در `.env` می‌خواند (پیش‌فرض: `http://localhost:3000`؛ در پروداکشن: `http://localhost:3000,https://smart-electric.ir,https://www.smart-electric.ir`). در محیط لوکال فرانت‌اند را با `http://localhost:3000` باز کنید (نه `127.0.0.1:3000`).
 3. **نحوه دریافت و کش کردن در فرانت‌اند (TanStack Query):**
    - استان‌ها (بدون نیاز به لاگین): `GET /locations/provinces` $\leftarrow$ خروجی `[{ id, name, slug }]`
    - شهرهای استان (بدون نیاز به لاگین): `GET /locations/provinces/${provinceId}/cities` $\leftarrow$ خروجی `[{ id, name, slug, provinceId }]` (فقط وقتی `provinceId > 0` است فراخوانی شود).
    - با تغییر استان در فرم، مقدار `cityId` قبلی ریست شود.
 4. **نکته مهم UI برای Combobox داخل Dialog (`@base-ui/react/dialog`):**
    - اگر از `@base-ui/react/dialog` استفاده می‌کنید، قرار دادن لیست کشویی داخل `Popover.Portal` (در `document.body`) باعث می‌شود `Dialog` به عنوان لایه modal، بخش بیرونی را `inert` کند و کلیک/تایپ داخل لیست شهرها کار نکند. لیست کشویی Combobox را به صورت `position: absolute` داخل همان کامپوننت رندر کنید (بدون `Portal`).
+
+---
+
+## ۵. تنظیمات سرور پروداکشن، HTTPS، CORS و پیامک واقعی OTP (قاصدک)
+
+1. **الزام HTTPS در پروداکشن (جلوگیری از Mixed Content و حفظ کوکی‌های `httpOnly`):**
+   - هنگامی که فرانت‌اند روی `https://smart-electric.ir` اجرا می‌شود، `NEXT_PUBLIC_API_URL` **مطلقاً نباید** `http://<IP>` باشد (مرورگر درخواست `http://` داخل صفحه `https://` را بلاک می‌کند).
+   - پیشنهاد استاندارد: پراکسی Nginx روی مسیر `/api/` به `http://127.0.0.1:4000/` و تنظیم `NEXT_PUBLIC_API_URL=https://smart-electric.ir/api` (یا ساب‌دامین HTTPS مانند `https://api.smart-electric.ir`) و **بیلد مجدد فرانت‌اند (`pnpm build`)**.
+   - بک‌ند `app.set('trust proxy', 1)` و `CORS_ORIGIN` را پشتیبانی می‌کند و در `NODE_ENV=production` کوکی‌های `accessToken` و `refreshToken` را با `secure: true` و `sameSite: 'lax'` ست می‌کند.
+2. **ارسال واقعی پیامک OTP (درگاه قاصدک):**
+   - سرویس `SmsService` به وب‌سرویس قاصدک (`https://gateway.ghasedak.me/rest/api/v1/webservice/sendotpsms`) متصل شده است و از متغیرهای `GHASEDAK_API_KEY`، `GHASEDAK_OTP_TEMPLATE` و `GHASEDAK_OTP_PARAM` استفاده می‌کند.
+   - در حالت `NODE_ENV=production` فیلد `devCode` در پاسخ `/auth/request-otp`، `/auth/login` و `/auth/register` **ارسال نمی‌شود** (`devCode?: string` فقط در محیط غیرپروداکشن وجود دارد).
+   - اگر درگاه پیامک موقتاً در دسترس نباشد یا خطا بدهد، بک‌ند خطای `503 Service Unavailable` با پیام فارسی برمی‌گرداند که فرانت‌اند باید آن را به کاربر نمایش دهد.
 
 

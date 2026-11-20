@@ -1,4 +1,10 @@
-import { IsNotEmpty, IsString, Length, Matches } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Length,
+  Matches,
+} from 'class-validator';
 
 export class RegisterDto {
   @IsString({ message: 'نام باید از نوع متنی باشد' })
@@ -48,6 +54,11 @@ export class VerifyOtpDto {
   @IsNotEmpty({ message: 'وارد کردن کد تایید الزامی است' })
   @Matches(/^\d{6}$/, { message: 'کد تایید باید دقیقاً ۶ رقم عددی باشد' })
   code: string;
+
+  @IsOptional()
+  @IsString({ message: 'نام باید از نوع متنی باشد' })
+  @Length(2, 100, { message: 'نام باید بین ۲ تا ۱۰۰ کاراکتر باشد' })
+  name?: string;
 }
 
 // برای سازگاری احتمالی کدهای قبلی

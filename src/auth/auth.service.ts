@@ -228,15 +228,11 @@ export class AuthService {
    * در صورت صحت، کد باطل شده، نشست و توکن‌های ورود تولید می‌گردند.
    */
   async verifyOtp(dto: VerifyOtpDto) {
-    const user = await this.prisma.user.findUnique({
+    let user = await this.prisma.user.findUnique({
       where: { phone: dto.phone },
     });
 
-    if (!user) {
-      throw new NotFoundException('کاربری با این شماره تلفن یافت نشد');
-    }
-
-    if (!user.isActive) {
+    if (user && !user.isActive) {
       throw new ForbiddenException('حساب کاربری شما غیرفعال شده است');
     }
 
@@ -273,6 +269,21 @@ export class AuthService {
         data: { attempts: { increment: 1 } },
       });
       throw new BadRequestException('کد تأیید وارد شده اشتباه است');
+    }
+
+    if (!user) {
+      const cleanName = dto.name?.trim();
+      if (!cleanName || cleanName.length < 2) {
+        throw new BadRequestException(
+          'برای تکمیل ثبت‌نام وارد کردن نام و نام خانوادگی الزامی است',
+        );
+      }
+      user = await this.prisma.user.create({
+        data: {
+          phone: dto.phone,
+          name: cleanName,
+        },
+      });
     }
 
     // علامت‌گذاری کد به عنوان استفاده شده

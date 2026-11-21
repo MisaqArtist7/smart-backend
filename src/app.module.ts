@@ -36,6 +36,7 @@ import { RolesGuard } from './auth/guards/roles.guard.js';
     CommentsModule,
     DiscountsModule,
     LocationsModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [

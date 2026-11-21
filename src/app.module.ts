@@ -16,6 +16,7 @@ import { BrandModule } from './brand/brand.module.js';
 import { CommentsModule } from './comments/comments.module.js';
 import { DiscountsModule } from './discounts/discounts.module.js';
 import { LocationsModule } from './locations/locations.module.js';
+import { UsersModule } from './users/users.module.js';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from './auth/guards/roles.guard.js';
 

@@ -337,13 +337,18 @@ export class AuthService {
 
     // ۲. تشخیص دزدی (Reuse Detection): اگر توکنی که قبلاً باطل شده استفاده شود،
     // احتمالاً به سرقت رفته است؛ بنابراین کلیه رفرش توکن‌های آن کاربر فوراً باطل می‌شوند.
+    // تبصره هم‌زمانی: اگر توکن کمتر از ۱۵ ثانیه پیش باطل شده باشد (درخواست هم‌زمان تب دیگر)،
+    // کل نشست‌های کاربر باطل نمی‌شوند تا کاربر بی‌دلیل لاگ‌اوت نشود.
     if (tokenRecord.revokedAt) {
-      await this.prisma.refreshToken.updateMany({
-        where: { userId: tokenRecord.userId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
+      const revokedAgoMs = Date.now() - tokenRecord.revokedAt.getTime();
+      if (revokedAgoMs > 15_000) {
+        await this.prisma.refreshToken.updateMany({
+          where: { userId: tokenRecord.userId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
       throw new UnauthorizedException(
-        'نشست نامعتبر شناسایی شد؛ به دلیل امنیتی کلیه نشست‌های فعال باطل شدند. لطفاً دوباره وارد شوید',
+        'نشست نامعتبر شناسایی شد؛ لطفاً دوباره وارد شوید',
       );
     }
 

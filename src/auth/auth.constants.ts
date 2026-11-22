@@ -3,7 +3,7 @@ import type { CookieOptions, Response } from 'express';
 export const ACCESS_TOKEN_COOKIE = 'accessToken';
 export const REFRESH_TOKEN_COOKIE = 'refreshToken';
 
-export const ACCESS_TOKEN_MAX_AGE_MS = 15 * 60 * 1000; // ۱۵ دقیقه
+export const ACCESS_TOKEN_MAX_AGE_MS = 2 * 60 * 60 * 1000; // ۲ ساعت
 export const REFRESH_TOKEN_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // ۳۰ روز
 
 export function getAccessTokenCookieOptions(): CookieOptions {

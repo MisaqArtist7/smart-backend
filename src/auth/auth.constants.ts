@@ -23,7 +23,7 @@ export function getRefreshTokenCookieOptions(): CookieOptions {
     httpOnly: true,
     secure: isProd,
     sameSite: 'lax',
-    path: '/auth',
+    path: '/',
     maxAge: REFRESH_TOKEN_MAX_AGE_MS,
   };
 }
@@ -44,6 +44,12 @@ export function setAuthCookies(
 export function clearAuthCookies(res: Response) {
   const isProd = process.env.NODE_ENV === 'production';
   res.clearCookie(ACCESS_TOKEN_COOKIE, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: 'lax',
+    path: '/',
+  });
+  res.clearCookie(REFRESH_TOKEN_COOKIE, {
     httpOnly: true,
     secure: isProd,
     sameSite: 'lax',

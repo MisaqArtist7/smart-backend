@@ -103,6 +103,29 @@ model RefreshToken {
   - **رفتار:** پاک‌سازی کوکی‌های احراز هویت در مرورگر.
   - **پاسخ (200 OK):** `{ "message": "خروج با موفقیت انجام شد" }`
 
+#### اندپوینت‌های مدیریت کاربران در پنل ادمین (`/admin/users`):
+- `GET /admin/users`
+  - **دسترسی:** فقط ادمین (`@Roles(Role.ADMIN)`)
+  - **رفتار:** بازگرداندن لیست تمامی کاربران ثبت‌نام‌شده در سیستم به ترتیب جدیدترین (`createdAt: 'desc'`) همراه با تعداد سفارش‌ها و دیدگاه‌ها (`_count: { orders, comments }`).
+  - **پاسخ (200 OK):** آرایه‌ای از `{ id, name, phone, role, isActive, createdAt, updatedAt, _count }`
+- `GET /admin/users/:id`
+  - **دسترسی:** فقط ادمین (`@Roles(Role.ADMIN)`)
+  - **رفتار:** دریافت مشخصات کامل یک کاربر به همراه لیست آدرس‌ها و آمار سفارش‌ها/دیدگاه‌ها.
+- `PATCH /admin/users/:id`
+  - **دسترسی:** فقط ادمین (`@Roles(Role.ADMIN)`)
+  - **Body (اختیاری):** `{ "name"?: string, "phone"?: string, "role"?: "ADMIN" | "CUSTOMER", "isActive"?: boolean }`
+  - **قوانین امنیتی:** ادمین جاری نمی‌تواند نقش `ADMIN` حساب کاربری خودش را به `CUSTOMER` تغییر دهد (`400 Bad Request`).
+- `PATCH /admin/users/:id/role`
+  - **دسترسی:** فقط ادمین (`@Roles(Role.ADMIN)`)
+  - **Body:** `{ "role": "ADMIN" | "CUSTOMER" }`
+
+#### لیست کاربران فعلی ثبت‌شده در دیتابیس:
+| شناسه (`id`) | نام (`name`) | شماره موبایل (`phone`) | نقش (`role`) | وضعیت (`isActive`) |
+| :--- | :--- | :--- | :--- | :--- |
+| `2` | `misaq` | `09302340279` | `ADMIN` | فعال (`true`) |
+| `3` | `misaq` | `09192148749` | `CUSTOMER` | فعال (`true`) |
+| `4` | `مدیر سیستم` | `09121111111` | `ADMIN` | فعال (`true`) |
+
 ---
 
 ### ۲. ماژول دسته‌بندی‌ها (`Category`)

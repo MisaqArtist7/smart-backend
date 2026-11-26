@@ -15,7 +15,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
       useFactory: (config: ConfigService) => ({
         secret:
           config.get<string>('JWT_SECRET') || 'smart-electric-jwt-secret-key',
-        signOptions: { expiresIn: '2h' },
+        signOptions: { expiresIn: '24h' },
       }),
     }),
   ],
